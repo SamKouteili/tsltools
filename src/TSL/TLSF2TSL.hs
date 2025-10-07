@@ -5,8 +5,8 @@ module TSL.TLSF2TSL
   )
 where
 
-import Data.Char (isDigit)
-import Data.List (intercalate, isPrefixOf, isSuffixOf)
+-- import Data.Char (isDigit)
+import Data.List (isPrefixOf, isSuffixOf)
 import Data.Maybe (mapMaybe)
 
 -- | Convert TLSF string to TSL string
@@ -53,8 +53,8 @@ processFormula line =
         else Just $ decodeTlsfFormula trimmed
 
 -- | Remove trailing semicolon
-removeSemicolon :: String -> String
-removeSemicolon s = if ";" `isSuffixOf` s then init s else s
+-- removeSemicolon :: String -> String
+-- removeSemicolon s = if ";" `isSuffixOf` s then init s else s
 
 -- | Trim whitespace from both ends
 trim :: String -> String
@@ -108,14 +108,14 @@ decodeUpdate token =
         then decodeComplexUpdate withoutPrefix
         else decodeSimpleUpdate withoutPrefix
 
--- | Decode simple update like u0ball0ball -> ball
+-- | Decode simple update like u0ball0ball -> [ball <- ball]
 decodeSimpleUpdate :: String -> String
 decodeSimpleUpdate token =
   let parts = splitOn '0' token
    in case parts of
         [] -> token
-        [x] -> x
-        (x : _) -> x
+        [x] -> "[" ++ x ++ " <- " ++ x ++ "]"
+        (x : _) -> "[" ++ x ++ " <- " ++ x ++ "]"
 
 -- | Decode complex update like ball0f1dmove2right0ball1b -> [ball <- moveRight ball]
 decodeComplexUpdate :: String -> String

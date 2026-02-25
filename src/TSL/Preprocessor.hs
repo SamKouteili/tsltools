@@ -8,6 +8,7 @@ where
 -- Imports
 
 import Control.Monad (forM_, void)
+import Data.Char (isAlpha, isAlphaNum, isDigit)
 import Data.Functor.Identity (Identity)
 import Numeric (showFFloat)
 import TSL.Error (Error, genericError, parseError, unwrap, warn)
@@ -47,8 +48,11 @@ parenthize = surround '(' ')'
 bracketify :: String -> String
 bracketify = surround '[' ']'
 
-data Specification = Specification (Maybe Theory) [Section]
+data Specification = Specification (Maybe Theory) [BindingDef] [Section]
   deriving (Eq)
+
+data BindingDef = BindingDef String String -- name, raw RHS text
+  deriving (Show, Eq)
 
 data Section = Section (Maybe TemporalWrapper) SectionType [Expr]
   deriving (Show, Eq)
@@ -119,8 +123,11 @@ instance Fmt Char where
   fmt c = [c]
 
 instance Fmt Specification where
-  fmt (Specification (Just theory) sections) = unlines $ ('#' : show theory) : map fmt sections
-  fmt (Specification Nothing sections) = unlines $ map fmt sections
+  fmt (Specification (Just theory) bindings sections) = unlines $ ('#' : show theory) : map fmt bindings ++ map fmt sections
+  fmt (Specification Nothing bindings sections) = unlines $ map fmt bindings ++ map fmt sections
+
+instance Fmt BindingDef where
+  fmt (BindingDef name rhs) = name ++ " = " ++ rhs ++ ";"
 
 instance Show Specification where
   show = fmt
@@ -244,6 +251,9 @@ sectionNames = ["initially", "always", "assume", "guarantee"]
 temporalOpNames :: [String]
 temporalOpNames = ["R", "U", "W", "X", "F"]
 
+issyKeywords :: [String]
+issyKeywords = ["var", "inp", "SPECIFICATION"]
+
 tslDef :: Token.LanguageDef a
 tslDef =
   emptyDef
@@ -256,7 +266,7 @@ tslDef =
       Token.caseSensitive = True,
       Token.opStart = oneOf "!&|=/+*[-<",
       Token.opLetter = oneOf "!&|=/+*[]<->",
-      Token.reservedNames = sectionNames ++ temporalOpNames,
+      Token.reservedNames = sectionNames ++ temporalOpNames ++ issyKeywords,
       Token.reservedOpNames = binOpNames
     }
 
@@ -334,9 +344,14 @@ specParser :: Parser Specification
 specParser = do
   whiteSpace
   theory <- option Nothing (Just <$> theoryParser)
-  -- whiteSpace
+  decls <- many (try skipVarOrInpDecl)
+  Parsec.optional skipSpecification
+  bindings <- many (try bindingParser)
   sections <- sectionParser `sepBy` spaces
-  return $ Specification theory sections
+  let effectiveTheory = case theory of
+        Just t -> Just t
+        Nothing -> if null decls then Nothing else Just Lia
+  return $ Specification effectiveTheory bindings sections
 
 theoryParser :: Parser Theory
 theoryParser = do
@@ -357,7 +372,7 @@ sectionParser = do
     temporalParser =
       (reserved "initially" >> return (Just Initially))
         <|> (reserved "always" >> return (Just Always))
-        <|> return Nothing
+        <|> return (Just Initially)
 
     sectionTypeParser :: Parser SectionType
     sectionTypeParser =
@@ -440,9 +455,47 @@ functionLiteralParser = do
     argParser =
       try literalParser <|> fmap Symbol (try identifier) <|> try signalParser
 
+-- Issy format support
+
+skipVarOrInpDecl :: Parser ()
+skipVarOrInpDecl = do
+  _ <- reserved "var" <|> reserved "inp"
+  _ <- identifier -- type: Int, Bool
+  _ <- identifier -- variable name
+  return ()
+
+skipSpecification :: Parser ()
+skipSpecification = reserved "SPECIFICATION"
+
+bindingParser :: Parser BindingDef
+bindingParser = do
+  name <- identifier
+  _ <- reservedOp "="
+  rhs <- Parsec.manyTill Parsec.anyChar (Parsec.lookAhead (Parsec.char ';'))
+  _ <- semicolon
+  return $ BindingDef name (trimTrailingWhitespace rhs)
+  where
+    trimTrailingWhitespace = reverse . dropWhile (`elem` (" \t\n\r" :: String)) . reverse
+
+-- | Normalize Issy-style iN() constants to intN().
+-- Replaces identifier tokens matching i<digits> with int<digits>.
+-- Safe: int3 (suffix "nt3" not all digits), inBounds ("nBounds" not all digits).
+normalizeIssyConstants :: String -> String
+normalizeIssyConstants [] = []
+normalizeIssyConstants s@(c : cs)
+  | isAlpha c || c == '_' =
+      let (ident, rest) = span (\ch -> isAlphaNum ch || ch == '_' || ch == '.') s
+       in normalizeIdent ident ++ normalizeIssyConstants rest
+  | otherwise = c : normalizeIssyConstants cs
+  where
+    normalizeIdent ('i' : digits)
+      | not (null digits) && all isDigit digits = "int" ++ digits
+    normalizeIdent ident = ident
+
 parse :: String -> Either Error Specification
 parse input =
-  let result = Parsec.parse (specParser <* Parsec.eof) errMsg input
+  let normalized = normalizeIssyConstants input
+      result = Parsec.parse (specParser <* Parsec.eof) errMsg normalized
    in case result of
         Left err -> parseError err
         Right spec -> Right spec
@@ -459,7 +512,7 @@ preprocess input = do
   return $ fmt spec
 
 check :: Specification -> IO ()
-check (Specification mTheory sections) = case mTheory of
+check (Specification mTheory _bindings sections) = case mTheory of
   Nothing -> checkUf False sections -- only warn if no tag
   Just Uf -> checkUf True sections
   Just EUf -> checkEUf sections

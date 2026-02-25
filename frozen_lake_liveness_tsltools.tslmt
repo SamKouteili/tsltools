@@ -1,0 +1,21 @@
+#LIA
+
+/* Liveness-only spec: just reach the goal, no safety constraints.
+ * Grid: 4x4, Start: (0,0), Goal: (3,3)
+ */
+
+initially assume {
+    eq x int0();
+    eq y int0();
+}
+
+always guarantee {
+    /* Stay in bounds */
+    G ((gte x int0()) && (lte x int3()) && (gte y int0()) && (lte y int3()));
+
+    /* Movement: one axis at a time */
+    G ((([x <- x] || [x <- add x int1()] || [x <- sub x int1()]) && [y <- y]) || ([x <- x] && ([y <- y] || [y <- add y int1()] || [y <- sub y int1()])));
+
+    /* Objective: liveness only — reach the goal */
+    F ((eq x int3()) && (eq y int3()));
+}

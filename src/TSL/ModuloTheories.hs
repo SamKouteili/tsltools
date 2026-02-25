@@ -10,10 +10,11 @@ module TSL.ModuloTheories
   )
 where
 
-import Control.Monad (unless)
+import Control.Monad (unless, when)
 import Control.Monad.Trans.Except
-import Data.Maybe (catMaybes, isJust)
+import Data.Maybe (isJust)
 import System.Directory (findExecutable)
+import System.IO (hPutStrLn, stderr)
 import TSL.Base.Reader (readTSL)
 import TSL.Base.Specification (Specification)
 import TSL.Error (genericError, unwrap)
@@ -47,30 +48,41 @@ theorize solverPath spec = do
                 "}"
               ]
 
-          extractAssumption :: (Monad m) => ExceptT e m a -> m (Maybe a)
-          extractAssumption result = do
-            either <- runExceptT result
-            return $ case either of
-              Left _ -> Nothing
-              Right assumption -> Just assumption
+          extractAssumptions :: (Show e) => Maybe Int -> [ExceptT e IO String] -> IO String
+          extractAssumptions maxAssumptions results = do
+            (assumptions, skipped) <- gather results []
+            when (skipped > 0) $
+              hPutStrLn stderr $
+                "[TSL-MT] skipped " ++ show skipped ++ " assumptions"
+            return $ unlines assumptions
+            where
+              reachedCap kept =
+                case maxAssumptions of
+                  Just n -> kept >= n
+                  Nothing -> False
 
-          extractAssumptions :: (Monad m) => [ExceptT e m String] -> m String
-          extractAssumptions =
-            fmap (unlines . catMaybes) . mapM extractAssumption
+              gather [] kept = return (reverse kept, 0)
+              gather pending kept
+                | reachedCap (length kept) =
+                    return (reverse kept, length pending)
+              gather (nextResult : rest) kept = do
+                runResult <- runExceptT nextResult
+                case runResult of
+                  Right assumption -> gather rest (assumption : kept)
+                  Left _ -> do
+                    (assumptions, skipped) <- gather rest kept
+                    return (assumptions, skipped + 1)
 
           consistencyAssumptions :: IO String
           consistencyAssumptions =
-            extractAssumptions $
+            extractAssumptions Nothing $
               generateConsistencyAssumptions
                 solverPath
                 preds
 
           sygusAssumptions :: IO String
-          sygusAssumptions = do
-            putStrLn "Generating sygus assumptions"
-            putStrLn $ "preds: " ++ show (buildDtoList preds)
-            putStrLn $ "cfg: " ++ show cfg
-            extractAssumptions $
+          sygusAssumptions =
+            extractAssumptions (Just 8) $
               generateSygusAssumptions
                 solverPath
                 cfg

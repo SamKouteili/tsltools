@@ -7,6 +7,7 @@
 -- Maintainer  :  Wonhyuk Choi
 module TSL.ModuloTheories.Sygus.Query (generateSygusQuery) where
 
+import Data.List (nub)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -61,7 +62,11 @@ dto2Sygus synthTarget models (Dto _ pre post) =
     fApplied = paren1 $ unwords [functionName, show synthTarget]
     postcondition = predReplacedSmt synthTarget fApplied post
     forallExpr = unlines [forallDecl, forallBody, minitab 1 ")"]
-    varDecls = paren1 $ unwords $ map declareVar $ predSignals post
+    -- Quantify every signal that can appear in the DTO constraint.
+    -- Restricting this to post signals causes undeclared-variable errors
+    -- whenever the precondition introduces extra symbols.
+    varDecls = paren1 $ unwords $ map declareVar allSignals
+    allSignals = nub $ predSignals pre ++ predSignals post
     forallDecl = minitab 1 $ "(forall " ++ varDecls
     forallBody =
       unlines $

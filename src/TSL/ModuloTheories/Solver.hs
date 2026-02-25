@@ -14,6 +14,7 @@ import Data.List (isInfixOf)
 import qualified Data.Text as Text
 import System.Exit (ExitCode (..))
 import System.Process (readProcessWithExitCode)
+import System.Timeout (timeout)
 import TSL.Error (Error, errSolver, errSygus)
 
 strip :: String -> String
@@ -30,8 +31,24 @@ runSolver solverPath args query = do
   -- let logName = "tmp/tmp_" ++ show (length fileCount `div` 2)
   -- liftIO $ writeFile (logName ++ ".smt2") query
   -- liftIO $ writeFile (logName ++ "_args.txt") $ unlines args
-  parseResult =<< ExceptT (Right <$> readProcessWithExitCode solverPath args query)
+  result <- ExceptT $ do
+    mResult <- timeout config_SOLVER_TIMEOUT_US $
+      readProcessWithExitCode solverPath args query
+    pure $ case mResult of
+      Nothing ->
+        errSolver $
+          "Timed out after "
+            ++ show (config_SOLVER_TIMEOUT_US `div` 1000000)
+            ++ " seconds: "
+            ++ solverPath
+      Just solverResult -> Right solverResult
+  parseResult result
   where
+    -- Keep individual solver calls bounded so one hard SyGuS/SMT query
+    -- does not block the whole TSL-MT pipeline.
+    config_SOLVER_TIMEOUT_US :: Int
+    config_SOLVER_TIMEOUT_US = 10 * 1000000
+
     parseResult :: (ExitCode, String, String) -> ExceptT Error IO String
     parseResult (exitCode, stdout, stderr) = case exitCode of
       ExitSuccess -> return stdout

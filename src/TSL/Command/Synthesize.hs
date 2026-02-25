@@ -54,6 +54,7 @@ optionsParser =
             <> action "file"
       )
     <*> ( flag' HOA.Arduino (long "arduino" <> help "generates code for Arduino")
+            <|> flag' HOA.C (long "c" <> help "generates code for C")
             <|> flag' HOA.Python (long "python" <> help "generates code for Python")
             <|> flag' HOA.JS (long "js" <> help "generates code for JS backend")
             <|> flag' HOA.XState (long "xstate" <> help "generates code for xstate diagrams")

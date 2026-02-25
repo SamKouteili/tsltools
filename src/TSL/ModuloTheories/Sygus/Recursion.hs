@@ -30,7 +30,7 @@ import TSL.ModuloTheories.Sygus.Common
     parenthize,
   )
 import TSL.ModuloTheories.Sygus.Parser (parseModels)
-import TSL.ModuloTheories.Sygus.Update (Update (..))
+import TSL.ModuloTheories.Sygus.Update (DataSource (..), Update (..))
 import TSL.ModuloTheories.Theories
   ( TheorySymbol,
     read2Symbol,
@@ -41,7 +41,7 @@ config_NUM_SUBQUERIES :: Int
 config_NUM_SUBQUERIES = 3
 
 config_SUBQUERY_AST_MAX_SIZE :: Int
-config_SUBQUERY_AST_MAX_SIZE = 3
+config_SUBQUERY_AST_MAX_SIZE = 6
 
 produceModelsQuery :: (Show a) => [[Model a]] -> TheoryPredicate -> String
 produceModelsQuery models pred = query
@@ -144,13 +144,27 @@ findRecursion subqueryUpdates = do
     extractRecursion [] =
       errSygus $
         "Empty updates found for " ++ debugUpdates
-    extractRecursion (x : xs) =
-      if all (== x) xs
-        then return x
-        else
-          errSygus $
-            "Updates not recursive: "
-              ++ debugUpdates
+    extractRecursion updates@(x : xs) =
+      let candidates = stripNeutralSelfUpdates updates
+       in case candidates of
+            [] -> errSygus $ "Empty updates found for " ++ debugUpdates
+            (y : ys) ->
+              if all (== y) ys
+                then return y
+                else
+                  errSygus $
+                    "Updates not recursive: "
+                      ++ debugUpdates
+
+    stripNeutralSelfUpdates :: (Eq a) => [Update a] -> [Update a]
+    stripNeutralSelfUpdates updates =
+      let nonSelf = filter (not . isSelfUpdate) updates
+       in if null nonSelf then updates else nonSelf
+
+    isSelfUpdate :: (Eq a) => Update a -> Bool
+    isSelfUpdate update = case source update of
+      TslFunction _ _ -> False
+      TslValue value -> sink update == value
 
     flattenUpdates :: [[a]] -> Either Error [a]
     flattenUpdates [] = Right []

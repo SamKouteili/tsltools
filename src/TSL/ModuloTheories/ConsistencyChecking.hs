@@ -16,14 +16,12 @@ where
 
 import Control.Monad.Trans.Except
 import qualified Data.List as L
-import Data.Maybe (fromMaybe)
 import Debug.Trace (trace)
 import TSL.Base.Ast (AstInfo (..), SymbolInfo (..), deduplicate)
 import TSL.Error (Error, errConsistency)
 import TSL.ModuloTheories.Debug (IntermediateResults (..))
 import TSL.ModuloTheories.Predicates
   ( TheoryPredicate (..),
-    enumeratePreds,
     pred2Smt,
     pred2Tsl,
     predInfo,
@@ -45,7 +43,7 @@ import TSL.ModuloTheories.Theories
 --  this number can be changed based on the problem, but even for simple synthesis problems the
 --  number of predicates being checked was always become 2^n. This simplifies while getting the correct answer
 config_MAX_CONSISTENCY_CHECKS :: Maybe Int
-config_MAX_CONSISTENCY_CHECKS = Just 100
+config_MAX_CONSISTENCY_CHECKS = Just 30
 
 generateConsistencyAssumptions ::
   FilePath ->
@@ -54,10 +52,10 @@ generateConsistencyAssumptions ::
 generateConsistencyAssumptions path preds =
   map (fmap fst . consistencyChecking path) limitedCombos
   where
-    allCombos = enumeratePreds preds
+    combos = consistencyCombos preds
     limitedCombos = case config_MAX_CONSISTENCY_CHECKS of
-      Just n -> take n allCombos
-      Nothing -> allCombos
+      Just n -> take n combos
+      Nothing -> combos
 
 consistencyDebug ::
   FilePath ->
@@ -66,10 +64,22 @@ consistencyDebug ::
 consistencyDebug path preds =
   map (fmap snd . consistencyChecking path) limitedCombos
   where
-    allCombos = enumeratePreds preds
+    combos = consistencyCombos preds
     limitedCombos = case config_MAX_CONSISTENCY_CHECKS of
-      Just n -> take n allCombos
-      Nothing -> allCombos
+      Just n -> take n combos
+      Nothing -> combos
+
+consistencyCombos :: [TheoryPredicate] -> [TheoryPredicate]
+consistencyCombos preds = singles ++ pairs
+  where
+    samePred x y = show x == show y
+    literals = L.nubBy samePred (preds ++ map NotPLit preds)
+    singles = literals
+    pairs =
+      [ AndPLit p q
+        | (idx, p) <- zip [0 :: Int ..] literals,
+          q <- drop (idx + 1) literals
+      ]
 
 pred2Assumption :: TheoryPredicate -> String
 pred2Assumption p = "G " ++ pred2Tsl (NotPLit p) ++ ";"

@@ -6,6 +6,7 @@ module TSL.HOA (CodeTarget (..), implement, implement') where
 import qualified Hanoi as H
 import TSL.Error (genericError, unwrap)
 import qualified TSL.HOA.Arduino as Arduino (implement)
+import qualified TSL.HOA.C as C (implement)
 import qualified TSL.HOA.JavaScript as JS (implement)
 import qualified TSL.HOA.Python as Python (implement)
 import qualified TSL.HOA.Verilog as Verilog (implement)
@@ -14,6 +15,7 @@ import qualified TSL.HOA.XState as XState (implement)
 data CodeTarget
   = Python
   | Arduino
+  | C
   | JS
   | Verilog
   | XState
@@ -25,6 +27,7 @@ implement isCounter = \case
   XState -> XState.implement
   JS -> JS.implement isCounter
   Arduino -> Arduino.implement isCounter
+  C -> C.implement isCounter
   Verilog -> Verilog.implement isCounter
 
 implement' :: Bool -> CodeTarget -> String -> IO String

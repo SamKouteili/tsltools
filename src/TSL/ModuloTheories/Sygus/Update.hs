@@ -84,9 +84,9 @@ instance Functor Update where
   fmap f update = Update (f (sink update)) (fmap f (source update))
 
 removeSelfUpdates :: (Eq a) => [[Update a]] -> [[Update a]]
-removeSelfUpdates = catMaybes . (map removeSelves)
+removeSelfUpdates = catMaybes . map removeSelves
   where
-    removeSelves xs = case catMaybes ((map removeSelfUpdate) xs) of
+    removeSelves xs = case catMaybes (map removeSelfUpdate xs) of
       [] -> Nothing
       ys -> Just ys
 
@@ -94,7 +94,9 @@ removeSelfUpdates = catMaybes . (map removeSelves)
       TslFunction _ _ -> Just $ update
       TslValue sinkTerm ->
         if (sink update) == sinkTerm
-          then Nothing
+          -- Preserve purely self-update timesteps so assumptions like
+          -- [x <- x] are representable instead of being dropped entirely.
+          then Just update
           else Just $ update
 
 term2DataSource :: Term a -> DataSource a

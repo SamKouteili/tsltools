@@ -17,10 +17,11 @@ where
 import Control.Exception (assert)
 import Control.Monad (liftM2)
 import Control.Monad.Trans.Except
+import Data.List (nubBy)
 import TSL.Error (Error, errSygus)
 import TSL.ModuloTheories.Cfg (Cfg)
 import TSL.ModuloTheories.Debug (IntermediateResults (..))
-import TSL.ModuloTheories.Predicates (TheoryPredicate, predTheory)
+import TSL.ModuloTheories.Predicates (TheoryPredicate, predSignals, predTheory)
 import TSL.ModuloTheories.Solver (runSygusQuery)
 import TSL.ModuloTheories.Sygus.Assumption (makeAssumption)
 import TSL.ModuloTheories.Sygus.Common
@@ -54,9 +55,19 @@ buildDto pre post = Dto theory pre post
     theoryEq = (predTheory pre) == (predTheory post)
 
 buildDtoList :: [TheoryPredicate] -> [Dto]
-buildDtoList preds = concat $ map buildWith preds
+buildDtoList preds = concatMap buildWith uniquePreds
   where
-    buildWith pred = map (buildDto pred) preds
+    -- Keep the DTO set stable and avoid redundant solver calls on
+    -- syntactically-identical predicate literals.
+    uniquePreds = nubBy samePred preds
+    samePred x y = show x == show y
+
+    shareSignal p q =
+      any (`elem` predSignals q) (predSignals p)
+
+    buildWith pred =
+      map (buildDto pred) $
+        filter (shareSignal pred) uniquePreds
 
 generateUpdates ::
   FilePath ->
@@ -96,9 +107,12 @@ generateAssumption solverPath cfg dto temporal =
   if not $ sygus2Supported $ theory dto
     then except unsupportedError
     else case temporal of
-      next@(Next maxAstSize) -> do
-        (updates, debugInfo) <- genNextUpdates maxAstSize
-        let assumption = makeAssumption' next updates
+      (Next _) -> do
+        (updates, debugInfo) <- genNextUpdates config_SUBQUERY_AST_MAX_SIZE
+        let maxNextDepth = 2
+            cappedUpdates = take maxNextDepth updates
+            nextDepth = max 1 (length cappedUpdates)
+            assumption = makeAssumption' (Next nextDepth) cappedUpdates
             debugInfo' = NextDebug debugInfo <$> assumption
         liftM2 (,) assumption debugInfo'
       Eventually -> do

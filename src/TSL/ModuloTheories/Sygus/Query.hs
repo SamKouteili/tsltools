@@ -30,7 +30,8 @@ import TSL.ModuloTheories.Sygus.Common
     targetPostfix,
   )
 import TSL.ModuloTheories.Theories
-  ( TAst,
+  ( DefinedFunction (..),
+    TAst,
     TheorySymbol,
     makeSignal,
     smtSortDecl,
@@ -156,8 +157,8 @@ syntaxConstraint functionInput cfg =
     funDeclComment = "\r\n;; Name and signature of the function to be synthesized"
     varDeclComment = "\r\n;; Declare the nonterminals used in the grammar"
 
-generateSygusQuery :: Cfg -> [Model TheorySymbol] -> Dto -> Either Error String
-generateSygusQuery cfg models dto@(Dto theory _ post) =
+generateSygusQuery :: [DefinedFunction] -> Cfg -> [Model TheorySymbol] -> Dto -> Either Error String
+generateSygusQuery defs cfg models dto@(Dto theory _ post) =
   if null sygusTargets
     then errSygus $ "Empty Query for " ++ show dto
     else Right query
@@ -169,10 +170,12 @@ generateSygusQuery cfg models dto@(Dto theory _ post) =
     declTheory = "(set-logic " ++ show theory ++ ")"
     checkSynth = "(check-synth)"
     sortDecl = smtSortDecl theory
+    defineFuns = unlines $ map dfSmtDecl defs
     query =
       unlines
         [ declTheory,
           sortDecl,
+          defineFuns,
           grammar,
           constraint,
           checkSynth

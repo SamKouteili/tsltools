@@ -1,0 +1,9 @@
+#NRA
+
+/* Basic NRA spec with real arithmetic and multiplication */
+/* Should generate assumptions relating updates to predicates */
+
+always guarantee {
+    x > 0.0 -> X x > 0.0;
+    [x <- x * 2.0 + 1.0];
+}

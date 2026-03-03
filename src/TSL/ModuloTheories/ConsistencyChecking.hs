@@ -29,7 +29,8 @@ import TSL.ModuloTheories.Predicates
   )
 import TSL.ModuloTheories.Solver (solveSat)
 import TSL.ModuloTheories.Theories
-  ( Theory,
+  ( DefinedFunction (..),
+    Theory,
     TheorySymbol,
     isUninterpreted,
     smtSortDecl,
@@ -47,10 +48,11 @@ config_MAX_CONSISTENCY_CHECKS = Just 30
 
 generateConsistencyAssumptions ::
   FilePath ->
+  [DefinedFunction] ->
   [TheoryPredicate] ->
   [ExceptT Error IO String]
-generateConsistencyAssumptions path preds =
-  map (fmap fst . consistencyChecking path) limitedCombos
+generateConsistencyAssumptions path defs preds =
+  map (fmap fst . consistencyChecking path defs) limitedCombos
   where
     combos = consistencyCombos preds
     limitedCombos = case config_MAX_CONSISTENCY_CHECKS of
@@ -59,10 +61,11 @@ generateConsistencyAssumptions path preds =
 
 consistencyDebug ::
   FilePath ->
+  [DefinedFunction] ->
   [TheoryPredicate] ->
   [ExceptT Error IO ConsistencyDebugInfo]
-consistencyDebug path preds =
-  map (fmap snd . consistencyChecking path) limitedCombos
+consistencyDebug path defs preds =
+  map (fmap snd . consistencyChecking path defs) limitedCombos
   where
     combos = consistencyCombos preds
     limitedCombos = case config_MAX_CONSISTENCY_CHECKS of
@@ -97,10 +100,11 @@ instance Show ConsistencyDebugInfo where
 
 consistencyChecking ::
   FilePath ->
+  [DefinedFunction] ->
   TheoryPredicate ->
   ExceptT Error IO (String, ConsistencyDebugInfo)
-consistencyChecking solverPath pred = do
-  let query = pred2SmtQuery pred
+consistencyChecking solverPath defs pred = do
+  let query = pred2SmtQuery defs pred
   isSat <- solveSat solverPath query
   if isSat
     then
@@ -116,22 +120,28 @@ consistencyChecking solverPath pred = do
       trace ("[Consistency] adding assumption for " ++ show pred) $ return ()
       return (assumption, debugInfo)
 
-pred2SmtQuery :: TheoryPredicate -> String
-pred2SmtQuery p = unlines [smtDeclarations, assertion, checkSat]
+pred2SmtQuery :: [DefinedFunction] -> TheoryPredicate -> String
+pred2SmtQuery defs p = unlines [smtDeclarations, assertion, checkSat]
   where
-    smtDeclarations = smtDecls (predTheory p) $ deduplicate $ predInfo p
+    smtDeclarations = smtDecls (predTheory p) defs $ deduplicate $ predInfo p
     assertion = "(assert " ++ pred2Smt p ++ ")"
     checkSat = "(check-sat)"
 
-smtDecls :: Theory -> AstInfo TheorySymbol -> String
-smtDecls theory (AstInfo vars funcs preds) =
-  unlines [logic, sortDecl, varDecls, funcDecls, predDecls]
+smtDecls :: Theory -> [DefinedFunction] -> AstInfo TheorySymbol -> String
+smtDecls theory defs (AstInfo vars funcs preds) =
+  unlines [logic, sortDecl, defineFuns, varDecls, funcDecls, predDecls]
   where
     logic = "(set-logic " ++ show theory ++ ")"
     sortDecl = smtSortDecl theory
-    varDecls = unlines $ map declConst vars
+    definedNames = map dfName defs
+    defineFuns = unlines $ map dfSmtDecl defs
+    varDecls = unlines $ map declConst $ filter (notDefined . symbol) vars
     funcDecls = unlines $ map declFunc funcs
     predDecls = unlines $ map declPred preds
+
+    notDefined sym = symbol2Smt sym `notElem` definedNames
+
+    symbol (SymbolInfo x _) = x
 
     declConst (SymbolInfo x _) =
       "(declare-const " ++ symbol2Smt x ++ " " ++ symbolType x ++ ")"

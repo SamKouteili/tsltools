@@ -21,6 +21,7 @@ import TSL.Error (genericError, unwrap)
 import TSL.ModuloTheories.Cfg
 import TSL.ModuloTheories.ConsistencyChecking
 import TSL.ModuloTheories.Predicates
+import qualified TSL.Preprocessor as PP (Specification (..), FunctionDef (..), parse, signal2Smt)
 import TSL.ModuloTheories.Sygus
 import TSL.ModuloTheories.Theories
 
@@ -33,7 +34,7 @@ theorize solverPath spec = do
       "Invalid path to solver: " ++ solverPath
 
   -- parse and theorize
-  (mTheory, tslSpec, specStr) <- parse spec
+  (mTheory, defs, tslSpec, specStr) <- parse spec
   case mTheory of
     Nothing -> return specStr
     Just theory -> do
@@ -78,6 +79,7 @@ theorize solverPath spec = do
             extractAssumptions Nothing $
               generateConsistencyAssumptions
                 solverPath
+                defs
                 preds
 
           sygusAssumptions :: IO String
@@ -85,6 +87,7 @@ theorize solverPath spec = do
             extractAssumptions (Just 8) $
               generateSygusAssumptions
                 solverPath
+                defs
                 cfg
                 (buildDtoList preds)
 
@@ -102,19 +105,55 @@ theorize solverPath spec = do
       Left err -> error $ show err
       Right val -> val
 
-parse :: String -> IO (Maybe Theory, Specification, String)
+parse :: String -> IO (Maybe Theory, [DefinedFunction], Specification, String)
 parse spec = do
   let linesList = lines spec
       hasTheoryAnnotation = '#' == head (head linesList)
   if hasTheoryAnnotation
     then do
-      let specStr = unlines $ tail linesList -- FIXME: unlines.lines is computationally wasteful
-      theory <- unwrap <$> readTheory $ head linesList
+      let theoryLine = head linesList
+          restLines = tail linesList
+          -- Separate #define lines from the rest
+          (defineLines, otherLines) = span isDefineLine restLines
+          specStr = unlines otherLines
+      theory <- unwrap <$> readTheory $ theoryLine
+      -- Parse #define lines using the preprocessor
+      defs <- parseDefines theory (unlines (theoryLine : defineLines))
       tslmt <- readTSL specStr >>= unwrap
-      return (Just theory, tslmt, specStr)
+      return (Just theory, defs, tslmt, specStr)
     else do
       rawTSL <- readTSL spec >>= unwrap
-      return (Nothing, rawTSL, spec)
+      return (Nothing, [], rawTSL, spec)
+  where
+    isDefineLine l =
+      let stripped = dropWhile (== ' ') l
+       in take 7 stripped == "#define"
+
+    parseDefines :: Theory -> String -> IO [DefinedFunction]
+    parseDefines theory input = do
+      let ppResult = PP.parse input
+      case ppResult of
+        Left _ -> return []
+        Right ppSpec -> return $ extractDefs theory ppSpec
+
+    extractDefs :: Theory -> PP.Specification -> [DefinedFunction]
+    extractDefs theory ppSpec =
+      let defs = ppSpecDefs ppSpec
+       in map (functionDef2Defined theory) defs
+
+    ppSpecDefs :: PP.Specification -> [PP.FunctionDef]
+    ppSpecDefs (PP.Specification _ defs _ _) = defs
+
+    functionDef2Defined :: Theory -> PP.FunctionDef -> DefinedFunction
+    functionDef2Defined theory (PP.FunctionDef name params body) =
+      let sortStr = case theory of
+            Nra -> "Real"
+            Lia -> "Int"
+            _ -> show theory
+          paramDecls = unwords $ map (\p -> "(" ++ p ++ " " ++ sortStr ++ ")") params
+          smtBody = PP.signal2Smt body
+          smtDecl = "(define-fun " ++ name ++ " (" ++ paramDecls ++ ") " ++ sortStr ++ " " ++ smtBody ++ ")"
+       in DefinedFunction name smtDecl
 
 -- | Check if the given solver path is valid
 checkSolverPath :: FilePath -> IO Bool

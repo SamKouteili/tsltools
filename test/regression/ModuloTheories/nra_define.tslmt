@@ -1,0 +1,14 @@
+#NRA
+#define f(x) = 0.5 * x + 0.3;
+
+/* NRA spec with a #define function interpretation */
+/* f should become (define-fun f ((x Real)) Real (+ (* 0.5 x) 0.3)) in SMT queries */
+
+always assume {
+    x > 0.0 && x < 10.0;
+}
+
+always guarantee {
+    [y <- f x];
+    X (y > 0.0);
+}

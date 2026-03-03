@@ -2,6 +2,9 @@
 module TSL.Preprocessor
   ( preprocess,
     parse,
+    Specification (..),
+    FunctionDef (..),
+    signal2Smt,
   )
 where
 
@@ -9,6 +12,7 @@ where
 
 import Control.Monad (forM_, void)
 import Data.Char (isAlpha, isAlphaNum, isDigit)
+import Data.List (intercalate)
 import Data.Functor.Identity (Identity)
 import Numeric (showFFloat)
 import TSL.Error (Error, genericError, parseError, unwrap, warn)
@@ -48,10 +52,13 @@ parenthize = surround '(' ')'
 bracketify :: String -> String
 bracketify = surround '[' ']'
 
-data Specification = Specification (Maybe Theory) [BindingDef] [Section]
+data Specification = Specification (Maybe Theory) [FunctionDef] [BindingDef] [Section]
   deriving (Eq)
 
 data BindingDef = BindingDef String String -- name, raw RHS text
+  deriving (Show, Eq)
+
+data FunctionDef = FunctionDef String [String] Signal -- name, params, body
   deriving (Show, Eq)
 
 data Section = Section (Maybe TemporalWrapper) SectionType [Expr]
@@ -123,11 +130,15 @@ instance Fmt Char where
   fmt c = [c]
 
 instance Fmt Specification where
-  fmt (Specification (Just theory) bindings sections) = unlines $ ('#' : show theory) : map fmt bindings ++ map fmt sections
-  fmt (Specification Nothing bindings sections) = unlines $ map fmt bindings ++ map fmt sections
+  fmt (Specification (Just theory) defs bindings sections) = unlines $ ('#' : show theory) : map fmt defs ++ map fmt bindings ++ map fmt sections
+  fmt (Specification Nothing defs bindings sections) = unlines $ map fmt defs ++ map fmt bindings ++ map fmt sections
 
 instance Fmt BindingDef where
   fmt (BindingDef name rhs) = name ++ " = " ++ rhs ++ ";"
+
+instance Fmt FunctionDef where
+  fmt (FunctionDef name params body) =
+    "#define " ++ name ++ "(" ++ intercalate ", " params ++ ") = " ++ fmtSignalInfix body ++ ";"
 
 instance Show Specification where
   show = fmt
@@ -212,6 +223,41 @@ instance Fmt BinaryComparator where
     Lte -> "lte"
     Gte -> "gte"
 
+-- Signal to SMT conversion
+
+signal2Smt :: Signal -> String
+signal2Smt = \case
+  TSLInt n -> show n
+  TSLReal r -> show r
+  Symbol s -> s
+  BinaryFunction f lhs rhs ->
+    "(" ++ bfToSmt f ++ " " ++ signal2Smt lhs ++ " " ++ signal2Smt rhs ++ ")"
+  UninterpretedFunction f args ->
+    "(" ++ f ++ " " ++ unwords (map signal2Smt args) ++ ")"
+  where
+    bfToSmt = \case
+      Add -> "+"
+      Sub -> "-"
+      Mult -> "*"
+      Div -> "/"
+
+fmtSignalInfix :: Signal -> String
+fmtSignalInfix = \case
+  TSLInt n -> show n
+  TSLReal r -> show r
+  Symbol s -> s
+  BinaryFunction f lhs rhs ->
+    fmtSignalInfix lhs ++ " " ++ bfToInfix f ++ " " ++ fmtSignalInfix rhs
+  UninterpretedFunction f [] -> f
+  UninterpretedFunction f args ->
+    f ++ "(" ++ intercalate ", " (map fmtSignalInfix args) ++ ")"
+  where
+    bfToInfix = \case
+      Add -> "+"
+      Sub -> "-"
+      Mult -> "*"
+      Div -> "/"
+
 -- Eq instances
 
 instance Eq Predicate where
@@ -266,7 +312,7 @@ tslDef =
       Token.caseSensitive = True,
       Token.opStart = oneOf "!&|=/+*[-<",
       Token.opLetter = oneOf "!&|=/+*[]<->",
-      Token.reservedNames = sectionNames ++ temporalOpNames ++ issyKeywords,
+      Token.reservedNames = sectionNames ++ temporalOpNames ++ issyKeywords ++ ["#NRA", "#define"],
       Token.reservedOpNames = binOpNames
     }
 
@@ -344,6 +390,7 @@ specParser :: Parser Specification
 specParser = do
   whiteSpace
   theory <- option Nothing (Just <$> theoryParser)
+  defines <- many (try defineParser)
   decls <- many (try skipVarOrInpDecl)
   Parsec.optional skipSpecification
   bindings <- many (try bindingParser)
@@ -351,13 +398,14 @@ specParser = do
   let effectiveTheory = case theory of
         Just t -> Just t
         Nothing -> if null decls then Nothing else Just Lia
-  return $ Specification effectiveTheory bindings sections
+  return $ Specification effectiveTheory defines bindings sections
 
 theoryParser :: Parser Theory
 theoryParser = do
   (reserved "#UF" >> return Uf)
     <|> (reserved "#EUF" >> return EUf)
     <|> (reserved "#LIA" >> return Lia)
+    <|> (reserved "#NRA" >> return Nra)
 
 -- <|> return Nothing
 
@@ -455,6 +503,16 @@ functionLiteralParser = do
     argParser =
       try literalParser <|> fmap Symbol (try identifier) <|> try signalParser
 
+defineParser :: Parser FunctionDef
+defineParser = do
+  reserved "#define"
+  name <- identifier
+  params <- Token.parens lexer (identifier `sepBy` Token.comma lexer)
+  _ <- reservedOp "="
+  body <- signalParser
+  semicolon
+  return $ FunctionDef name params body
+
 -- Issy format support
 
 skipVarOrInpDecl :: Parser ()
@@ -512,11 +570,12 @@ preprocess input = do
   return $ fmt spec
 
 check :: Specification -> IO ()
-check (Specification mTheory _bindings sections) = case mTheory of
+check (Specification mTheory _defs _bindings sections) = case mTheory of
   Nothing -> checkUf False sections -- only warn if no tag
   Just Uf -> checkUf True sections
   Just EUf -> checkEUf sections
   Just Lia -> return ()
+  Just Nra -> return ()
 
 checkUf :: Bool -> [Section] -> IO ()
 checkUf isError sections = forM_ sections checkUfSection

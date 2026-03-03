@@ -95,7 +95,7 @@ predicatesTests = map (convert2Cabal (makeTestName "Predicates") . hUnitTest) te
       ]
 
     hUnitTest (path, expectedNumPreds) = do
-      (mTheory, spec, _) <- readFile path >>= MT.parse
+      (mTheory, _, spec, _) <- readFile path >>= MT.parse
       case mTheory of
         Nothing -> return $ H.TestCase $ H.assertFailure "Does not invoke ModuloTheory (no theory tag)."
         Just theory -> do
@@ -112,7 +112,7 @@ cfgTests = [convert2Cabal (makeTestName "CFG") hUnitTest]
     expectedProductionRuleSize = 1
 
     hUnitTest = do
-      (mTheory, spec, _) <- readFile path >>= MT.parse
+      (mTheory, _, spec, _) <- readFile path >>= MT.parse
       case mTheory of
         Nothing -> return $ H.TestCase $ H.assertFailure "Does not invoke ModuloTheory (no theory tag)."
         Just theory ->
@@ -146,14 +146,14 @@ consistencyTests = [convert2Cabal (makeTestName "Consistency") hUnitTest]
     expectedNumQueries = 15
 
     hUnitTest = do
-      (mTheory, spec, _) <- readFile path >>= MT.parse
+      (mTheory, defs, spec, _) <- readFile path >>= MT.parse
       case mTheory of
         Nothing -> return $ H.TestCase $ H.assertFailure "Does not invoke ModuloTheory (no theory tag)."
         Just theory -> do
           let preds = case predsFromSpec theory spec of
                 Left err -> error $ show err
                 Right ps -> ps
-              results = consistencyDebug cvc5Path preds
+              results = consistencyDebug cvc5Path defs preds
           actualNumAssumptions <- countSuccess results
 
           -- putStrLn $ "Preds: " ++ show preds
@@ -198,7 +198,7 @@ sygusTests =
         zipWith (curry makeTestCase) paths numExpectedAssumptions
 
     makeTestCase (path, numExpected) = do
-      (mTheory, spec, _) <- readFile path >>= MT.parse
+      (mTheory, defs, spec, _) <- readFile path >>= MT.parse
       case mTheory of
         Nothing -> return $ H.TestCase $ H.assertFailure "Does not invoke ModuloTheory (no theory tag)."
         Just theory -> do
@@ -209,7 +209,7 @@ sygusTests =
                 Left err -> error $ "CFG ERROR: " ++ show err
                 Right grammar -> grammar
               dtos = buildDtoList preds
-          numActual <- countSuccess $ generateSygusAssumptions cvc5Path cfg dtos
+          numActual <- countSuccess $ generateSygusAssumptions cvc5Path defs cfg dtos
           return $ H.TestCase $ numExpected @=? numActual
 
 allTests :: [Test]

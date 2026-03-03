@@ -21,7 +21,7 @@ import Data.List (nubBy)
 import TSL.Error (Error, errSygus)
 import TSL.ModuloTheories.Cfg (Cfg)
 import TSL.ModuloTheories.Debug (IntermediateResults (..))
-import TSL.ModuloTheories.Predicates (TheoryPredicate, predSignals, predTheory)
+import TSL.ModuloTheories.Predicates (TheoryPredicate, predTheory)
 import TSL.ModuloTheories.Solver (runSygusQuery)
 import TSL.ModuloTheories.Sygus.Assumption (makeAssumption)
 import TSL.ModuloTheories.Sygus.Common
@@ -38,7 +38,7 @@ import TSL.ModuloTheories.Sygus.Recursion
     generatePbeModels,
   )
 import TSL.ModuloTheories.Sygus.Update (Update, term2Updates)
-import TSL.ModuloTheories.Theories (TheorySymbol, sygus2Supported)
+import TSL.ModuloTheories.Theories (DefinedFunction, TheorySymbol, sygus2Supported)
 
 data SygusDebugInfo
   = NextDebug IntermediateResults String
@@ -62,24 +62,20 @@ buildDtoList preds = concatMap buildWith uniquePreds
     uniquePreds = nubBy samePred preds
     samePred x y = show x == show y
 
-    shareSignal p q =
-      any (`elem` predSignals q) (predSignals p)
-
-    buildWith pred =
-      map (buildDto pred) $
-        filter (shareSignal pred) uniquePreds
+    buildWith pred = map (buildDto pred) uniquePreds
 
 generateUpdates ::
   FilePath ->
+  [DefinedFunction] ->
   Cfg ->
   Int ->
   [Model TheorySymbol] ->
   Dto ->
   ExceptT Error IO ([[Update String]], IntermediateResults)
-generateUpdates solverPath cfg depth models dto = liftM2 (,) updates debugInfo
+generateUpdates solverPath defs cfg depth models dto = liftM2 (,) updates debugInfo
   where
     query :: Either Error String
-    query = generateSygusQuery cfg models dto
+    query = generateSygusQuery defs cfg models dto
 
     result :: ExceptT Error IO String
     result = except query >>= (runSygusQuery solverPath depth)
@@ -99,11 +95,12 @@ generateUpdates solverPath cfg depth models dto = liftM2 (,) updates debugInfo
 
 generateAssumption ::
   FilePath ->
+  [DefinedFunction] ->
   Cfg ->
   Dto ->
   Temporal ->
   ExceptT Error IO (String, SygusDebugInfo)
-generateAssumption solverPath cfg dto temporal =
+generateAssumption solverPath defs cfg dto temporal =
   if not $ sygus2Supported $ theory dto
     then except unsupportedError
     else case temporal of
@@ -127,7 +124,7 @@ generateAssumption solverPath cfg dto temporal =
         let debugInfo = EventuallyDebug (zip pbeInfos subqueryInfos) assumption
         return (assumption, debugInfo)
   where
-    genUpdates depth = (flip (generateUpdates solverPath cfg depth)) dto
+    genUpdates depth = (flip (generateUpdates solverPath defs cfg depth)) dto
     genNextUpdates = (flip genUpdates) []
     genEventuallyUpdates = genUpdates config_SUBQUERY_AST_MAX_SIZE
     unsupportedError =
@@ -140,22 +137,24 @@ generateAssumption solverPath cfg dto temporal =
 
 generateSygusAssumptions ::
   FilePath ->
+  [DefinedFunction] ->
   Cfg ->
   [Dto] ->
   [ExceptT Error IO String]
-generateSygusAssumptions solverPath cfg dtos =
+generateSygusAssumptions solverPath defs cfg dtos =
   map (fmap fst) $
-    (generateAssumption solverPath cfg)
+    (generateAssumption solverPath defs cfg)
       <$> dtos
       <*> temporalAtoms
 
 sygusDebug ::
   FilePath ->
+  [DefinedFunction] ->
   Cfg ->
   [Dto] ->
   [ExceptT Error IO SygusDebugInfo]
-sygusDebug solverPath cfg dtos =
+sygusDebug solverPath defs cfg dtos =
   map (fmap snd) $
-    (generateAssumption solverPath cfg)
+    (generateAssumption solverPath defs cfg)
       <$> dtos
       <*> temporalAtoms

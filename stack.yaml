@@ -1,7 +1,7 @@
 resolver: lts-21.15
 allow-newer-deps:
 - finite
-- hanoi 
+- hanoi
 - syfco
 packages:
 - .
@@ -10,7 +10,8 @@ extra-deps:
   commit: 7d59bd8f5f11332b55a6c16c13d98a8df5ac8584
 - finite-1.4.1.2@sha256:9e41353b5ab053b5c937c13ec2ded6dcddb70e1f29204be4dd6bf683bb2b47c7,1931
 - github: Barnard-PL-Labs/syfco
-  commit: 9b248b47b6310752ec1cad26d537e147c6a195e7 
+  commit: 9b248b47b6310752ec1cad26d537e147c6a195e7
 allow-newer: true
 extra-include-dirs:
 - /opt/homebrew/include
+system-ghc: true

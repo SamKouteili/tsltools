@@ -106,6 +106,7 @@ consistencyChecking ::
 consistencyChecking solverPath defs pred = do
   let query = pred2SmtQuery defs pred
   isSat <- solveSat solverPath query
+  -- trace ("[Consistency] checking " ++ show pred ++ " with SMT query:\n" ++ query ++ "\nResult: " ++ show isSat) $ return ()
   if isSat
     then
       except $

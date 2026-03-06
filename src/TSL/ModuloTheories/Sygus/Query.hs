@@ -40,6 +40,7 @@ import TSL.ModuloTheories.Theories
     tast2Smt,
     tastSignals,
   )
+import Debug.Trace (trace)
 
 minitab :: Int -> String -> String
 minitab n = (++) (replicate (2 * n) ' ')
@@ -161,7 +162,7 @@ generateSygusQuery :: [DefinedFunction] -> Cfg -> [Model TheorySymbol] -> Dto ->
 generateSygusQuery defs cfg models dto@(Dto theory _ post) =
   if null sygusTargets
     then errSygus $ "Empty Query for " ++ show dto
-    else Right query
+    else Right $ trace ("QUERY IS: " ++ query) query
   where
     sygusTargets = getSygusTargets post cfg
     synthTarget = pickTarget sygusTargets

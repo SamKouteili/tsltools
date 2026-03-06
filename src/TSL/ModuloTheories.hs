@@ -24,6 +24,7 @@ import TSL.ModuloTheories.Predicates
 import qualified TSL.Preprocessor as PP (Specification (..), FunctionDef (..), parse, signal2Smt)
 import TSL.ModuloTheories.Sygus
 import TSL.ModuloTheories.Theories
+import Debug.Trace (trace)
 
 theorize :: FilePath -> String -> IO String
 theorize solverPath spec = do
@@ -68,6 +69,7 @@ theorize solverPath spec = do
                     return (reverse kept, length pending)
               gather (nextResult : rest) kept = do
                 runResult <- runExceptT nextResult
+                trace ("==== Result: ============\n\n" ++ show runResult ++ "\n==============================") $ return ()
                 case runResult of
                   Right assumption -> gather rest (assumption : kept)
                   Left _ -> do

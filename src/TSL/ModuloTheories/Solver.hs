@@ -76,4 +76,6 @@ runSygusQuery solverPath depth = (=<<) getResult . runSolver solverPath args
       except $
         if "error" `isInfixOf` result
           then errSygus result
-          else Right result
+          else if "infeasible" `isInfixOf` result
+            then errSygus "SyGus query is infeasible"
+            else Right result

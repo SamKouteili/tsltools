@@ -17,6 +17,7 @@ import qualified TSL.ModuloTheories as ModuloTheories
 import qualified TSL.Preprocessor as Preprocessor
 import qualified TSL.TLSF as TLSF
 import TSL.Utils (readInput, writeOutput)
+import Debug.Trace (trace)
 
 data Options = Options
   { inputPath :: Maybe FilePath,
@@ -93,6 +94,7 @@ synthesize (Options {inputPath, outputPath, target, solverPath, ltlsyntPath, ana
   -- desugared TSLMT spec (String) -> theory-encoded TSL spec (String)
   theorizedSpec <- ModuloTheories.theorize solverPath preprocessedSpec
 
+  trace ("Theorized spec:\n" ++ theorizedSpec) $ return ()
   ControlM.when analyzeSpec $ do
     spec <- Base.readTSL theorizedSpec >>= unwrap
     let formula = toFormula (assumptions spec) (guarantees spec)

@@ -233,7 +233,9 @@ signal2Smt = \case
   BinaryFunction f lhs rhs ->
     "(" ++ bfToSmt f ++ " " ++ signal2Smt lhs ++ " " ++ signal2Smt rhs ++ ")"
   UninterpretedFunction f args ->
-    "(" ++ f ++ " " ++ unwords (map signal2Smt args) ++ ")"
+    case length args of
+      0 -> f
+      _ -> "(" ++ f ++ " " ++ unwords (map signal2Smt args) ++ ")"
   where
     bfToSmt = \case
       Add -> "+"

@@ -24,6 +24,7 @@ import TSL.ModuloTheories.Predicates
 import qualified TSL.Preprocessor as PP (Specification (..), FunctionDef (..), parse, signal2Smt)
 import TSL.ModuloTheories.Sygus
 import TSL.ModuloTheories.Theories
+import Debug.Trace (trace)
 
 theorize :: FilePath -> String -> IO String
 theorize solverPath spec = do

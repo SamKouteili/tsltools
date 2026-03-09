@@ -38,7 +38,7 @@ showOperator other = other
 
 numeric2Tsl :: String -> String
 numeric2Tsl value =
-  case scan [re|(([+-]?[0-9]*\.[0-9]+))|] value of
+  case scan [re|([+-]?[0-9]*\.[0-9]+)|] value of
     [(_, [real])] -> "real" ++ real ++ "()"
     _ ->
       case scan [re|([0-9]+)|] value of

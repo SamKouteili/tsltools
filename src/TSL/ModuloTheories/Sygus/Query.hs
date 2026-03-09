@@ -40,7 +40,6 @@ import TSL.ModuloTheories.Theories
     tast2Smt,
     tastSignals,
   )
-import Debug.Trace (trace)
 
 minitab :: Int -> String -> String
 minitab n = (++) (replicate (2 * n) ' ')
@@ -51,8 +50,8 @@ functionName = "function"
 declareVar :: TheorySymbol -> String
 declareVar symbol = parenthize 1 $ unwords [show symbol, symbolType symbol]
 
-dto2Sygus :: TheorySymbol -> [Model TheorySymbol] -> Dto -> String
-dto2Sygus synthTarget models (Dto _ pre post) =
+dto2Sygus :: [TheorySymbol] -> TheorySymbol -> [Model TheorySymbol] -> Dto -> String
+dto2Sygus extraParams synthTarget models (Dto _ pre post) =
   unlines
     [ "(constraint",
       forallExpr,
@@ -61,14 +60,17 @@ dto2Sygus synthTarget models (Dto _ pre post) =
   where
     paren1 = parenthize 1
     precondition = paren1 $ unwords $ "and" : (pred2Smt pre) : (map show models)
-    fApplied = paren1 $ unwords [functionName, show synthTarget]
+    -- Apply the synthesized function to the target signal plus any extra
+    -- parameters (free-variable input signals appearing in the update rule).
+    fApplied = paren1 $ unwords $ [functionName, show synthTarget] ++ map show extraParams
     postcondition = predReplacedSmt synthTarget fApplied post
     forallExpr = unlines [forallDecl, forallBody, minitab 1 ")"]
-    -- Quantify every signal that can appear in the DTO constraint.
-    -- Restricting this to post signals causes undeclared-variable errors
-    -- whenever the precondition introduces extra symbols.
+    -- Quantify every signal that can appear in the DTO constraint:
+    -- signals from pre/post predicates plus any extra synth-fun parameters
+    -- (free-variable input signals like x in [y <- f x]) so that the
+    -- function call (function y x) is well-scoped inside the forall.
     varDecls = paren1 $ unwords $ map declareVar allSignals
-    allSignals = nub $ predSignals pre ++ predSignals post
+    allSignals = nub $ predSignals pre ++ predSignals post ++ extraParams
     forallDecl = minitab 1 $ "(forall " ++ varDecls
     forallBody =
       unlines $
@@ -118,8 +120,8 @@ productionRules2Sygus nonterminal rules =
     expansion = minitab 3 $ parenthize 1 rulesSygus
     rulesSygus = unwords $ map tast2Smt rules
 
-syntaxConstraint :: TheorySymbol -> Cfg -> String
-syntaxConstraint functionInput cfg =
+syntaxConstraint :: [TheorySymbol] -> TheorySymbol -> Cfg -> String
+syntaxConstraint extraParams functionInput cfg =
   unlines
     [ funDeclComment,
       "(" ++ functionDeclaration,
@@ -138,17 +140,28 @@ syntaxConstraint functionInput cfg =
         Nothing -> minitab 2 $ ";; No grammar for " ++ show nonterminal ++ "\n"
         Just rules -> productionRules2Sygus nonterminal rules
 
+    -- Extra parameters (free-variable input signals) are declared alongside
+    -- the main target parameter so grammar rules can reference them directly.
     functionDeclaration =
       unwords
         [ "synth-fun",
           functionName,
-          "((",
-          inputName,
-          varType,
-          "))",
+          "(" ++ unwords (mainParam : extraParamDecls) ++ ")",
           varType
         ]
-    nonterminals = Set.toList $ nonterminalsUsed functionInput cfg
+      where
+        mainParam = "( " ++ inputName ++ " " ++ varType ++ " )"
+        extraParamDecls = map (\s -> "( " ++ show s ++ " " ++ symbolType s ++ " )") extraParams
+    -- Compute the candidate nonterminals: always include functionInput itself
+    -- (so constant-only updates like [y <- 3.0] get at least one nonterminal),
+    -- plus any signals that appear inside its production rules.
+    -- Then filter to only those that actually have production rules in cfg'
+    -- (the extended grammar), so that symbols like free variables (x) or
+    -- defined functions (f) used in updates don't appear as nonterminals
+    -- without expansion rules, which CVC5 rejects.
+    nonterminals =
+      filter (\sym -> case getProductionRules sym cfg' of Nothing -> False; Just _ -> True) $
+        Set.toList $ Set.insert functionInput $ nonterminalsUsed functionInput cfg
     varDecls = parenthize 1 $ unwords $ map declareVar nonterminals
     varType = symbolType functionInput
     inputName = show functionInput ++ targetPostfix
@@ -158,16 +171,31 @@ syntaxConstraint functionInput cfg =
     funDeclComment = "\r\n;; Name and signature of the function to be synthesized"
     varDeclComment = "\r\n;; Declare the nonterminals used in the grammar"
 
+-- | Signals that appear in the production rules of @synthTarget@ but have no
+-- CFG rules of their own (so cannot be grammar nonterminals) and are not
+-- defined functions.  These must be declared as extra @synth-fun@ parameters
+-- so CVC5 can reference them inside grammar production rules.
+computeExtraParams :: [DefinedFunction] -> TheorySymbol -> Cfg -> [TheorySymbol]
+computeExtraParams defs synthTarget cfg =
+  filter isExtraParam $ Set.toList $ nonterminalsUsed synthTarget cfg
+  where
+    hasRulesInCfg sym = case Map.lookup sym (grammar cfg) of
+      Nothing -> False
+      Just _ -> True
+    isDefinedFunc sym = show sym `elem` map dfName defs
+    isExtraParam sym = not (hasRulesInCfg sym) && not (isDefinedFunc sym)
+
 generateSygusQuery :: [DefinedFunction] -> Cfg -> [Model TheorySymbol] -> Dto -> Either Error String
 generateSygusQuery defs cfg models dto@(Dto theory _ post) =
   if null sygusTargets
     then errSygus $ "Empty Query for " ++ show dto
-    else Right $ trace ("QUERY IS: " ++ query) query
+    else Right query
   where
     sygusTargets = getSygusTargets post cfg
     synthTarget = pickTarget sygusTargets
-    grammar = syntaxConstraint synthTarget cfg
-    constraint = dto2Sygus synthTarget models dto
+    extraParams = computeExtraParams defs synthTarget cfg
+    grammar = syntaxConstraint extraParams synthTarget cfg
+    constraint = dto2Sygus extraParams synthTarget models dto
     declTheory = "(set-logic " ++ show theory ++ ")"
     checkSynth = "(check-synth)"
     sortDecl = smtSortDecl theory

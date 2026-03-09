@@ -1,0 +1,282 @@
+==== Result: ============
+
+Left SMT Consistency Flag: Predicate (< x 10.0) is satisfiable.  No new assumption added.
+==============================
+==== Result: ============
+
+Left SMT Consistency Flag: Predicate (> x 0.0) is satisfiable.  No new assumption added.
+==============================
+==== Result: ============
+
+Left SMT Consistency Flag: Predicate (> y 0.0) is satisfiable.  No new assumption added.
+==============================
+==== Result: ============
+
+Left SMT Consistency Flag: Predicate (not (< x 10.0)) is satisfiable.  No new assumption added.
+==============================
+==== Result: ============
+
+Left SMT Consistency Flag: Predicate (not (> x 0.0)) is satisfiable.  No new assumption added.
+==============================
+==== Result: ============
+
+Left SMT Consistency Flag: Predicate (not (> y 0.0)) is satisfiable.  No new assumption added.
+==============================
+==== Result: ============
+
+Left SMT Consistency Flag: Predicate (and (< x 10.0) (> x 0.0)) is satisfiable.  No new assumption added.
+==============================
+==== Result: ============
+
+Left SMT Consistency Flag: Predicate (and (< x 10.0) (> y 0.0)) is satisfiable.  No new assumption added.
+==============================
+[Consistency] adding assumption for (and (< x 10.0) (not (< x 10.0)))
+==== Result: ============
+
+Right "G !((lt x real10.0()) && !(lt x real10.0()));"
+==============================
+==== Result: ============
+
+Left SMT Consistency Flag: Predicate (and (< x 10.0) (not (> x 0.0))) is satisfiable.  No new assumption added.
+==============================
+==== Result: ============
+
+Left SMT Consistency Flag: Predicate (and (< x 10.0) (not (> y 0.0))) is satisfiable.  No new assumption added.
+==============================
+==== Result: ============
+
+Left SMT Consistency Flag: Predicate (and (> x 0.0) (> y 0.0)) is satisfiable.  No new assumption added.
+==============================
+==== Result: ============
+
+Left SMT Consistency Flag: Predicate (and (> x 0.0) (not (< x 10.0))) is satisfiable.  No new assumption added.
+==============================
+[Consistency] adding assumption for (and (> x 0.0) (not (> x 0.0)))
+==== Result: ============
+
+Right "G !((gt x real0.0()) && !(gt x real0.0()));"
+==============================
+==== Result: ============
+
+Left SMT Consistency Flag: Predicate (and (> x 0.0) (not (> y 0.0))) is satisfiable.  No new assumption added.
+==============================
+==== Result: ============
+
+Left SMT Consistency Flag: Predicate (and (> y 0.0) (not (< x 10.0))) is satisfiable.  No new assumption added.
+==============================
+==== Result: ============
+
+Left SMT Consistency Flag: Predicate (and (> y 0.0) (not (> x 0.0))) is satisfiable.  No new assumption added.
+==============================
+[Consistency] adding assumption for (and (> y 0.0) (not (> y 0.0)))
+==== Result: ============
+
+Right "G !((gt y real0.0()) && !(gt y real0.0()));"
+==============================
+[Consistency] adding assumption for (and (not (< x 10.0)) (not (> x 0.0)))
+==== Result: ============
+
+Right "G !(!(lt x real10.0()) && !(gt x real0.0()));"
+==============================
+==== Result: ============
+
+Left SMT Consistency Flag: Predicate (and (not (< x 10.0)) (not (> y 0.0))) is satisfiable.  No new assumption added.
+==============================
+==== Result: ============
+
+Left SMT Consistency Flag: Predicate (and (not (> x 0.0)) (not (> y 0.0))) is satisfiable.  No new assumption added.
+==============================
+[TSL-MT] skipped 17 assumptions
+==== Result: ============
+
+Left Sygus Error (line unknown): Empty Query for DTO:
+	(< x 10.0)
+	(< x 10.0)
+
+
+==============================
+==== Result: ============
+
+Left Sygus Error (line unknown): Empty Query for DTO:
+	(< x 10.0)
+	(< x 10.0)
+
+
+==============================
+==== Result: ============
+
+Left Sygus Error (line unknown): Empty Query for DTO:
+	(< x 10.0)
+	(> x 0.0)
+
+
+==============================
+==== Result: ============
+
+Left Sygus Error (line unknown): Empty Query for DTO:
+	(< x 10.0)
+	(> x 0.0)
+
+
+==============================
+==== Result: ============
+
+Left Solver Error (line unknown): 1 >> (error "Parse Error: <stdin>:14.20: Symbol 'x' not declared as a variable")
+
+
+==============================
+==== Result: ============
+
+Left Solver Error (line unknown): 1 >> (error "Parse Error: <stdin>:14.20: Symbol 'x' not declared as a variable")
+
+
+==============================
+==== Result: ============
+
+Left Sygus Error (line unknown): Empty Query for DTO:
+	(> x 0.0)
+	(< x 10.0)
+
+
+==============================
+==== Result: ============
+
+Left Sygus Error (line unknown): Empty Query for DTO:
+	(> x 0.0)
+	(< x 10.0)
+
+
+==============================
+==== Result: ============
+
+Left Sygus Error (line unknown): Empty Query for DTO:
+	(> x 0.0)
+	(> x 0.0)
+
+
+==============================
+==== Result: ============
+
+Left Sygus Error (line unknown): Empty Query for DTO:
+	(> x 0.0)
+	(> x 0.0)
+
+
+==============================
+==== Result: ============
+
+Left Solver Error (line unknown): 1 >> (error "Parse Error: <stdin>:14.20: Symbol 'x' not declared as a variable")
+
+
+==============================
+==== Result: ============
+
+Left Solver Error (line unknown): 1 >> (error "Parse Error: <stdin>:14.20: Symbol 'x' not declared as a variable")
+
+
+==============================
+==== Result: ============
+
+Left Sygus Error (line unknown): Empty Query for DTO:
+	(> y 0.0)
+	(< x 10.0)
+
+
+==============================
+==== Result: ============
+
+Left Sygus Error (line unknown): Empty Query for DTO:
+	(> y 0.0)
+	(< x 10.0)
+
+
+==============================
+==== Result: ============
+
+Left Sygus Error (line unknown): Empty Query for DTO:
+	(> y 0.0)
+	(> x 0.0)
+
+
+==============================
+==== Result: ============
+
+Left Sygus Error (line unknown): Empty Query for DTO:
+	(> y 0.0)
+	(> x 0.0)
+
+
+==============================
+==== Result: ============
+
+Left Solver Error (line unknown): 1 >> (error "Parse Error: <stdin>:14.20: Symbol 'x' not declared as a variable")
+
+
+==============================
+==== Result: ============
+
+Left Solver Error (line unknown): 1 >> (error "Parse Error: <stdin>:14.20: Symbol 'x' not declared as a variable")
+
+
+==============================
+[TSL-MT] skipped 18 assumptions
+Theorized spec:
+always assume {
+G !((lt x real10.0()) && !(lt x real10.0()));
+G !((gt x real0.0()) && !(gt x real0.0()));
+G !((gt y real0.0()) && !(gt y real0.0()));
+G !(!(lt x real10.0()) && !(gt x real0.0()));
+
+}
+always assume {
+((gt x real0.0()) && (lt x real10.0()));
+
+}
+
+always guarantee {
+[y <- (f x)];
+(X (gt y real0.0()));
+
+}
+
+
+Warning: Warning: Unrealizable Spec, generating counterstrategy
+#include <stdbool.h>
+
+int x;
+int y;
+
+void read_inputs(void) { }
+
+void main() {
+  int currentState = 0;
+  int _next_y;
+
+  while (1) {
+    read_inputs();
+
+    _next_y = y;
+
+    if (currentState == 0) {
+      if (  _next_y = y;) {
+        (x > 0.0) && (x < 10.0)
+        currentState = 0;
+      }
+      else if (  _next_y = f(x);) {
+        (x > 0.0) && (x < 10.0)
+        currentState = 0;
+      }
+      else if () {
+        true
+        currentState = 0;
+      }
+      else if (  _next_y = f(x); &&   _next_y = y;) {
+        true
+        currentState = 0;
+      }
+    }
+
+    y = _next_y;
+  }
+}
+

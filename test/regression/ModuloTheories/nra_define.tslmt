@@ -1,5 +1,5 @@
 #NRA
-#define f(x) = 1 * x + 2;
+#define f(x) = 0.5 * x + 0.3;
 
 /* NRA spec with a #define function interpretation */
 /* f should become (define-fun f ((x Real)) Real (+ (* 0.5 x) 0.3)) in SMT queries */

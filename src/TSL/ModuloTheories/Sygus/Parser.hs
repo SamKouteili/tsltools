@@ -95,9 +95,24 @@ negativeLiteralParser = parens innerVal
       literal <- literalParser
       return $ "(- " ++ literal ++ ")"
 
+-- | Handles rational literals that CVC5 returns as @(/ numerator denominator)@,
+--   e.g. @(/ 1 2)@ for 0.5 or @(/ (- 1) 2)@ for -0.5.
+divisionLiteralParser :: Parser String
+divisionLiteralParser = parens innerVal
+  where
+    innerVal = do
+      _ <- Parsec.string "/"
+      _ <- Parsec.space
+      num <- literalParser
+      _ <- Parsec.space
+      den <- literalParser
+      return $ "(/ " ++ num ++ " " ++ den ++ ")"
+
 literalParser :: Parser String
 literalParser = do
-  literal <- negativeLiteralParser <|> Parsec.many1 nonReserved
+  literal <- Parsec.try negativeLiteralParser
+         <|> Parsec.try divisionLiteralParser
+         <|> Parsec.many1 nonReserved
   return $ removePostfix literal
 
 symbolType :: Parser ()

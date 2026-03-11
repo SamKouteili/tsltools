@@ -4,6 +4,7 @@ module TSL.ModuloTheories
     parse,
     module TSL.ModuloTheories.Cfg,
     module TSL.ModuloTheories.ConsistencyChecking,
+    module TSL.ModuloTheories.Decomposition,
     module TSL.ModuloTheories.Predicates,
     module TSL.ModuloTheories.Sygus,
     module TSL.ModuloTheories.Theories,
@@ -20,6 +21,7 @@ import TSL.Base.Specification (Specification)
 import TSL.Error (genericError, unwrap)
 import TSL.ModuloTheories.Cfg
 import TSL.ModuloTheories.ConsistencyChecking
+import TSL.ModuloTheories.Decomposition (buildDtoList, predicateLiteralsFromSpec)
 import TSL.ModuloTheories.Predicates
 import qualified TSL.Preprocessor as PP (Specification (..), FunctionDef (..), parse, signal2Smt)
 import TSL.ModuloTheories.Sygus
@@ -39,7 +41,7 @@ theorize solverPath spec = do
     Nothing -> return specStr
     Just theory -> do
       let cfg = unError $ cfgFromSpec theory tslSpec
-          preds = unError $ predsFromSpec theory tslSpec
+          preds = unError $ predicateLiteralsFromSpec theory tslSpec
 
           mkAlwaysAssume :: String -> String
           mkAlwaysAssume assumptions =
@@ -84,12 +86,12 @@ theorize solverPath spec = do
 
           sygusAssumptions :: IO String
           sygusAssumptions =
-            extractAssumptions (Just 8) $
+            extractAssumptions Nothing $
               generateSygusAssumptions
                 solverPath
                 defs
                 cfg
-                (buildDtoList preds)
+                (unError $ buildDtoList theory tslSpec)
 
           assumptionsBlock :: IO String
           assumptionsBlock =

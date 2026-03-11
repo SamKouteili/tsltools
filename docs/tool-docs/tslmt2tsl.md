@@ -90,7 +90,6 @@ Unfortunately, there are many limitations in synthesizing TSL-MT with `tslmt2tsl
 The limitations can be categorized in three different types:
 
 ### Limitations of the tool
-* The temporal atom collection outlined in section 4.1 of the paper is substituted by an approximation.
 * The refinement loop given in section 4.4 is not fully implemented.
 
 ### Limitations of the dependencies

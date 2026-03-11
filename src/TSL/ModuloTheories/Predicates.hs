@@ -19,7 +19,7 @@ where
 
 import Control.Exception (assert)
 import Control.Monad (filterM)
-import TSL.Base.Ast (AstInfo, fromPredicateTerm, (+++))
+import TSL.Base.Ast (AstInfo (..), fromPredicateTerm, (+++))
 import TSL.Base.Logic (Formula (..), PredicateTerm, foldFormula)
 import TSL.Base.Specification (Specification (..))
 import TSL.Base.SymbolTable (SymbolTable (..))
@@ -39,7 +39,9 @@ import TSL.ModuloTheories.Theories
   )
 
 data TheoryPredicate
-  = PLiteral TAst
+  = PTrue Theory
+  | PFalse Theory
+  | PLiteral TAst
   | NotPLit TheoryPredicate
   | OrPLit TheoryPredicate TheoryPredicate
   | AndPLit TheoryPredicate TheoryPredicate
@@ -53,6 +55,8 @@ andPreds (x : xs) = AndPLit x $ andPreds xs
 
 pred2Smt :: TheoryPredicate -> String
 pred2Smt = \case
+  PTrue _ -> "true"
+  PFalse _ -> "false"
   PLiteral tast -> tast2Smt tast
   NotPLit p -> "(not " ++ pred2Smt p ++ ")"
   OrPLit p q -> "(or " ++ pred2Smt p ++ " " ++ pred2Smt q ++ ")"
@@ -60,6 +64,8 @@ pred2Smt = \case
 
 predReplacedSmt :: TheorySymbol -> String -> TheoryPredicate -> String
 predReplacedSmt symbol replacer = \case
+  PTrue _ -> "true"
+  PFalse _ -> "false"
   PLiteral tast -> replaceSmtShow symbol tast replacer
   NotPLit p -> "(not " ++ predReplacedSmt symbol replacer p ++ ")"
   OrPLit p q ->
@@ -77,6 +83,8 @@ predReplacedSmt symbol replacer = \case
 
 pred2Tsl :: TheoryPredicate -> String
 pred2Tsl = \case
+  PTrue _ -> "true"
+  PFalse _ -> "false"
   PLiteral tast -> tast2Tsl tast
   NotPLit p -> "!" ++ pred2Tsl p
   OrPLit p q -> "(" ++ pred2Tsl p ++ " || " ++ pred2Tsl q ++ ")"
@@ -84,6 +92,8 @@ pred2Tsl = \case
 
 predTheory :: TheoryPredicate -> Theory
 predTheory = \case
+  PTrue theory -> theory
+  PFalse theory -> theory
   PLiteral tast -> tastTheory tast
   NotPLit p -> predTheory p
   OrPLit p q -> assert (predTheory p == predTheory q) (predTheory p)
@@ -91,6 +101,8 @@ predTheory = \case
 
 predInfo :: TheoryPredicate -> AstInfo TheorySymbol
 predInfo = \case
+  PTrue _ -> AstInfo [] [] []
+  PFalse _ -> AstInfo [] [] []
   PLiteral tast -> tastInfo tast
   NotPLit p -> predInfo p
   OrPLit p q -> predInfo p +++ predInfo q
@@ -98,6 +110,8 @@ predInfo = \case
 
 predSignals :: TheoryPredicate -> [TheorySymbol]
 predSignals = \case
+  PTrue _ -> []
+  PFalse _ -> []
   PLiteral tast -> tastSignals tast
   NotPLit p -> predSignals p
   OrPLit p q -> predSignals p ++ predSignals q

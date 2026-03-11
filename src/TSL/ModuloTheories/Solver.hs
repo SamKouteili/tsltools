@@ -14,7 +14,6 @@ import Data.List (isInfixOf)
 import qualified Data.Text as Text
 import System.Exit (ExitCode (..))
 import System.Process (readProcessWithExitCode)
-import System.Timeout (timeout)
 import TSL.Error (Error, errSolver, errSygus)
 
 strip :: String -> String
@@ -31,24 +30,9 @@ runSolver solverPath args query = do
   -- let logName = "tmp/tmp_" ++ show (length fileCount `div` 2)
   -- liftIO $ writeFile (logName ++ ".smt2") query
   -- liftIO $ writeFile (logName ++ "_args.txt") $ unlines args
-  result <- ExceptT $ do
-    mResult <- timeout config_SOLVER_TIMEOUT_US $
-      readProcessWithExitCode solverPath args query
-    pure $ case mResult of
-      Nothing ->
-        errSolver $
-          "Timed out after "
-            ++ show (config_SOLVER_TIMEOUT_US `div` 1000000)
-            ++ " seconds: "
-            ++ solverPath
-      Just solverResult -> Right solverResult
+  result <- ExceptT $ Right <$> readProcessWithExitCode solverPath args query
   parseResult result
   where
-    -- Keep individual solver calls bounded so one hard SyGuS/SMT query
-    -- does not block the whole TSL-MT pipeline.
-    config_SOLVER_TIMEOUT_US :: Int
-    config_SOLVER_TIMEOUT_US = 10 * 1000000
-
     parseResult :: (ExitCode, String, String) -> ExceptT Error IO String
     parseResult (exitCode, stdout, stderr) = case exitCode of
       ExitSuccess -> return stdout
@@ -67,11 +51,11 @@ runGetModel solverPath = runSolver solverPath args
   where
     args = ["--lang=smt2"]
 
-runSygusQuery :: FilePath -> Int -> String -> ExceptT Error IO String
-runSygusQuery solverPath depth = (=<<) getResult . runSolver solverPath args
+runSygusQuery :: FilePath -> Maybe Int -> String -> ExceptT Error IO String
+runSygusQuery solverPath mDepth = (=<<) getResult . runSolver solverPath args
   where
-    args = depthLimit : ["-o", "sygus-sol-gterm", "--lang=sygus2"]
-    depthLimit = "--sygus-abort-size=" ++ show depth
+    depthLimit = maybe [] (\d -> ["--sygus-abort-size=" ++ show d]) mDepth
+    args = depthLimit ++ ["-o", "sygus-sol-gterm", "--lang=sygus2"]
     getResult result =
       except $
         if "error" `isInfixOf` result

@@ -36,7 +36,8 @@ instance Show Temporal where
 data Dto = Dto
   { theory :: Theory,
     preCondition :: TheoryPredicate,
-    postCondition :: TheoryPredicate
+    postCondition :: TheoryPredicate,
+    temporal :: Temporal
   }
 
 instance Show Dto where
@@ -45,6 +46,7 @@ instance Show Dto where
       [ "DTO:",
         '\t' : show preCondition,
         '\t' : show postCondition,
+        '\t' : show temporal,
         ""
       ]
 

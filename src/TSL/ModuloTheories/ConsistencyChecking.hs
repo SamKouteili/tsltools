@@ -14,8 +14,8 @@ module TSL.ModuloTheories.ConsistencyChecking
   )
 where
 
+import Control.Monad (filterM)
 import Control.Monad.Trans.Except
-import qualified Data.List as L
 import Debug.Trace (trace)
 import TSL.Base.Ast (AstInfo (..), SymbolInfo (..), deduplicate)
 import TSL.Error (Error, errConsistency)
@@ -38,26 +38,13 @@ import TSL.ModuloTheories.Theories
     symbolType,
   )
 
--- | Hard cap on how many predicate combinations we send to the SMT solver.
---    This prevents run‑away exponential behaviour when many uninterpreted
---    predicates appear in the spec.  Adjust as needed or expose it as a CLI flag.
---  this number can be changed based on the problem, but even for simple synthesis problems the
---  number of predicates being checked was always become 2^n. This simplifies while getting the correct answer
-config_MAX_CONSISTENCY_CHECKS :: Maybe Int
-config_MAX_CONSISTENCY_CHECKS = Just 30
-
 generateConsistencyAssumptions ::
   FilePath ->
   [DefinedFunction] ->
   [TheoryPredicate] ->
   [ExceptT Error IO String]
 generateConsistencyAssumptions path defs preds =
-  map (fmap fst . consistencyChecking path defs) limitedCombos
-  where
-    combos = consistencyCombos preds
-    limitedCombos = case config_MAX_CONSISTENCY_CHECKS of
-      Just n -> take n combos
-      Nothing -> combos
+  map (fmap fst . consistencyChecking path defs) (consistencyCombos preds)
 
 consistencyDebug ::
   FilePath ->
@@ -65,24 +52,22 @@ consistencyDebug ::
   [TheoryPredicate] ->
   [ExceptT Error IO ConsistencyDebugInfo]
 consistencyDebug path defs preds =
-  map (fmap snd . consistencyChecking path defs) limitedCombos
-  where
-    combos = consistencyCombos preds
-    limitedCombos = case config_MAX_CONSISTENCY_CHECKS of
-      Just n -> take n combos
-      Nothing -> combos
+  map (fmap snd . consistencyChecking path defs) (consistencyCombos preds)
 
 consistencyCombos :: [TheoryPredicate] -> [TheoryPredicate]
-consistencyCombos preds = singles ++ pairs
-  where
-    samePred x y = show x == show y
-    literals = L.nubBy samePred (preds ++ map NotPLit preds)
-    singles = literals
-    pairs =
-      [ AndPLit p q
-        | (idx, p) <- zip [0 :: Int ..] literals,
-          q <- drop (idx + 1) literals
-      ]
+consistencyCombos [] = []
+consistencyCombos preds =
+  let theory = predTheory (head preds)
+   in map (andPredsOrTrue theory) $ powerset preds
+
+powerset :: [a] -> [[a]]
+powerset = filterM (const [True, False])
+
+andPredsOrTrue :: Theory -> [TheoryPredicate] -> TheoryPredicate
+andPredsOrTrue theory = \case
+  [] -> PTrue theory
+  [x] -> x
+  (x : xs) -> AndPLit x (andPredsOrTrue theory xs)
 
 pred2Assumption :: TheoryPredicate -> String
 pred2Assumption p = "G " ++ pred2Tsl (NotPLit p) ++ ";"

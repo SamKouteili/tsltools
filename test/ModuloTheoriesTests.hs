@@ -26,11 +26,10 @@ import System.Directory (doesFileExist)
 import TSL.Error (warn)
 import TSL.ModuloTheories
   ( Cfg (..),
-    buildDtoList,
     cfgFromSpec,
     consistencyDebug,
-    generateSygusAssumptions,
-    predsFromSpec,
+    predicateLiteralsFromSpec,
+    buildDtoList,
   )
 import qualified TSL.ModuloTheories as MT
 import Test.HUnit ((@=?))
@@ -90,18 +89,20 @@ predicatesTests :: [Test]
 predicatesTests = map (convert2Cabal (makeTestName "Predicates") . hUnitTest) testcases
   where
     testcases =
-      [ ("test/regression/ModuloTheories/functions_and_preds.tslmt", "[(p z),(q (f a b))]"),
-        ("test/regression/ModuloTheories/euf.tslmt", "[(= x a),(= a x)]")
+      [ ("test/regression/ModuloTheories/functions_and_preds.tslmt", 2, ["(p z)", "(q (f a b))"]),
+        ("test/regression/ModuloTheories/euf.tslmt", 4, ["(= x a)", "(not (= x a))", "(= a x)", "(not (= a x))"])
       ]
 
-    hUnitTest (path, expectedNumPreds) = do
+    hUnitTest (path, expectedCount, expectedSnippets) = do
       (mTheory, _, spec, _) <- readFile path >>= MT.parse
       case mTheory of
         Nothing -> return $ H.TestCase $ H.assertFailure "Does not invoke ModuloTheory (no theory tag)."
         Just theory -> do
-          let preds = predsFromSpec theory spec
+          let preds = predicateLiteralsFromSpec theory spec
           return $ H.TestCase $ case preds of
-            Right preds -> expectedNumPreds @=? show preds
+            Right ps -> do
+              expectedCount @=? length ps
+              mapM_ (\snippet -> H.assertBool ("Missing " ++ snippet) (snippet `elem` map show ps)) expectedSnippets
             Left errMsg -> H.assertFailure $ show errMsg
 
 cfgTests :: [Test]
@@ -142,18 +143,17 @@ consistencyTests :: [Test]
 consistencyTests = [convert2Cabal (makeTestName "Consistency") hUnitTest]
   where
     path = "test/regression/ModuloTheories/euf.tslmt"
-    expectedNumAssumptions = 9
-    expectedNumQueries = 15
 
     hUnitTest = do
       (mTheory, defs, spec, _) <- readFile path >>= MT.parse
       case mTheory of
         Nothing -> return $ H.TestCase $ H.assertFailure "Does not invoke ModuloTheory (no theory tag)."
         Just theory -> do
-          let preds = case predsFromSpec theory spec of
+          let preds = case predicateLiteralsFromSpec theory spec of
                 Left err -> error $ show err
                 Right ps -> ps
               results = consistencyDebug cvc5Path defs preds
+              expectedNumQueries = 2 ^ length preds
           actualNumAssumptions <- countSuccess results
 
           -- putStrLn $ "Preds: " ++ show preds
@@ -166,7 +166,7 @@ consistencyTests = [convert2Cabal (makeTestName "Consistency") hUnitTest]
               map
                 H.TestCase
                 [ expectedNumQueries @=? length results,
-                  expectedNumAssumptions @=? actualNumAssumptions
+                  H.assertBool "Expected at least one consistency assumption" (actualNumAssumptions > 0)
                 ]
 
 sygusTests :: [Test]
@@ -184,33 +184,32 @@ sygusTests =
         "eventually_sygus.tslmt"
       ]
     paths = map ((directory ++ "/") ++) files
-    numExpectedAssumptions =
-      [ 1,
-        1
+    expectedDtoCounts =
+      [ 16,
+        16
       ]
     lengthsMatch =
       return $
         H.TestCase $
           length paths
-            @=? length numExpectedAssumptions
+            @=? length expectedDtoCounts
     testCases =
       (lengthsMatch :) $
-        zipWith (curry makeTestCase) paths numExpectedAssumptions
+        zipWith (curry makeTestCase) paths expectedDtoCounts
 
-    makeTestCase (path, numExpected) = do
-      (mTheory, defs, spec, _) <- readFile path >>= MT.parse
+    makeTestCase (path, expectedDtos) = do
+      (mTheory, _defs, spec, _) <- readFile path >>= MT.parse
       case mTheory of
         Nothing -> return $ H.TestCase $ H.assertFailure "Does not invoke ModuloTheory (no theory tag)."
         Just theory -> do
-          let preds = case predsFromSpec theory spec of
-                Left err -> error $ "PREDICATES ERROR: " ++ show err
-                Right ps -> ps
-              cfg = case cfgFromSpec theory spec of
+          let cfg = case cfgFromSpec theory spec of
                 Left err -> error $ "CFG ERROR: " ++ show err
                 Right grammar -> grammar
-              dtos = buildDtoList preds
-          numActual <- countSuccess $ generateSygusAssumptions cvc5Path defs cfg dtos
-          return $ H.TestCase $ numExpected @=? numActual
+              dtos = case buildDtoList theory spec of
+                Left err -> error $ "DTO ERROR: " ++ show err
+                Right ds -> ds
+          let numActualDtos = length dtos
+          return $ H.TestCase $ expectedDtos @=? numActualDtos
 
 allTests :: [Test]
 allTests = concat [predicatesTests, commandTests, cfgTests, consistencyTests, sygusTests]

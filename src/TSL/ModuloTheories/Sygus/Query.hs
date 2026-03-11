@@ -51,7 +51,7 @@ declareVar :: TheorySymbol -> String
 declareVar symbol = parenthize 1 $ unwords [show symbol, symbolType symbol]
 
 dto2Sygus :: TheorySymbol -> [Model TheorySymbol] -> Dto -> String
-dto2Sygus synthTarget models (Dto _ pre post) =
+dto2Sygus synthTarget models (Dto _ pre post _) =
   unlines
     [ "(constraint",
       forallExpr,
@@ -158,7 +158,7 @@ syntaxConstraint functionInput cfg =
     varDeclComment = "\r\n;; Declare the nonterminals used in the grammar"
 
 generateSygusQuery :: [DefinedFunction] -> Cfg -> [Model TheorySymbol] -> Dto -> Either Error String
-generateSygusQuery defs cfg models dto@(Dto theory _ post) =
+generateSygusQuery defs cfg models dto@(Dto theory _ post _) =
   if null sygusTargets
     then errSygus $ "Empty Query for " ++ show dto
     else Right query

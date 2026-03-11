@@ -6,6 +6,7 @@ module TSL.Base.Logic
     SignalTerm (..),
     FunctionTerm (..),
     PredicateTerm (..),
+    toNNF,
     foldFormula,
     updates,
     checks,
@@ -25,14 +26,67 @@ module TSL.Base.Logic
   )
 where
 
-import Control.Monad (void)
+import Control.Monad (void, (<=<))
 import Data.Char (isUpper, toLower, toUpper)
 import Data.Set (Set, difference, empty, insert, unions)
 import qualified Data.Set as S (map)
-import TSL.Error (Error, parseError)
+import TSL.Error (Error, genericError, parseError)
 import Test.QuickCheck (Arbitrary, arbitrary, choose)
 import Text.Parsec (alphaNum, char, eof, lookAhead, parse, string, try, (<|>))
 import Text.Parsec.String (Parser)
+
+-- | Convert a formula to negation normal form (NNF). Derived
+-- operators are desugared; negations are pushed down to
+-- predicate/update atoms using the Until/Release duals.
+toNNF :: Formula a -> Either Error (Formula a)
+toNNF = nnf <=< desugar
+  where
+    desugar = \case
+      Implies x y -> desugar $ Or [Not x, y]
+      Equiv x y -> desugar $ And [Implies x y, Implies y x]
+      Globally x -> Release FFalse <$> desugar x
+      Finally x -> Until TTrue <$> desugar x
+      Weak x y -> desugar $ Or [Until x y, Globally x]
+      Release x y -> Release <$> desugar x <*> desugar y
+      Until x y -> Until <$> desugar x <*> desugar y
+      Next x -> Next <$> desugar x
+      Not x -> Not <$> desugar x
+      And xs -> And <$> traverse desugar xs
+      Or xs -> Or <$> traverse desugar xs
+      Previous {} -> unsupported "Previous"
+      Historically {} -> unsupported "Historically"
+      Once {} -> unsupported "Once"
+      Since {} -> unsupported "Since"
+      Triggered {} -> unsupported "Triggered"
+      TTrue -> Right TTrue
+      FFalse -> Right FFalse
+      Check p -> Right $ Check p
+      Update s t -> Right $ Update s t
+
+    nnf = \case
+      Not x -> nnfNeg x
+      And xs -> And <$> traverse nnf xs
+      Or xs -> Or <$> traverse nnf xs
+      Next x -> Next <$> nnf x
+      Until x y -> Until <$> nnf x <*> nnf y
+      Release x y -> Release <$> nnf x <*> nnf y
+      other -> Right other
+
+    nnfNeg = \case
+      TTrue -> Right FFalse
+      FFalse -> Right TTrue
+      Check p -> Right $ Not (Check p)
+      Update s t -> Right $ Not (Update s t)
+      Not x -> nnf x
+      And xs -> Or <$> traverse nnfNeg xs
+      Or xs -> And <$> traverse nnfNeg xs
+      Next x -> Next <$> nnfNeg x
+      Until x y -> Release <$> nnfNeg x <*> nnfNeg y
+      Release x y -> Until <$> nnfNeg x <*> nnfNeg y
+      _ -> genericError $ "NNF: unsupported negation on non-atomic formula"
+
+    unsupported name =
+      genericError $ "NNF: unsupported past operator " ++ name
 
 -- | Representation of TSL signal terms.
 data SignalTerm a

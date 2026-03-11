@@ -12,9 +12,11 @@ import Distribution.TestSuite
     TestInstance (..),
   )
 import qualified JSWriterTests (tests)
+import qualified LogicNNFTests (tests)
 import qualified ModuloTheoriesTests (tests)
 import qualified PreprocessorTests (tests)
 import qualified SplitTests (tests)
+import qualified SygusAssumptionTests (tests)
 import TSL.Base
   ( PredicateTerm,
     SignalTerm,
@@ -74,7 +76,9 @@ tests ::
   IO [Test]
 tests = do
   jsTests <- JSWriterTests.tests
+  nnfTests <- LogicNNFTests.tests
   preprocessorTests <- PreprocessorTests.tests
+  sygusAssumptionTests <- SygusAssumptionTests.tests
   tslmtTests <- ModuloTheoriesTests.tests
 
   return $
@@ -83,7 +87,9 @@ tests = do
     ]
       ++ SplitTests.tests
       ++ jsTests
+      ++ nnfTests
       ++ preprocessorTests
+      ++ sygusAssumptionTests
       ++ tslmtTests
   where
     qc01 =

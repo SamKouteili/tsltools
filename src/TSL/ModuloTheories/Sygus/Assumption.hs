@@ -42,8 +42,8 @@ applyTemporal temporal expr = case temporal of
      in applyN numNext expr
   Eventually -> "F(" ++ expr ++ ")"
 
-makeAssumption :: Dto -> Temporal -> [[Update String]] -> Either Error String
-makeAssumption (Dto _ pre post) temporal updates =
+makeAssumption :: Dto -> [[Update String]] -> Either Error String
+makeAssumption (Dto _ pre post temporal) updates =
   Right $
     unwords
       [ "G",

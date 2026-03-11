@@ -9,7 +9,6 @@
 module TSL.ModuloTheories.Sygus.Recursion
   ( generatePbeModels,
     findRecursion,
-    config_SUBQUERY_AST_MAX_SIZE,
   )
 where
 
@@ -40,8 +39,6 @@ import TSL.ModuloTheories.Theories
 config_NUM_SUBQUERIES :: Int
 config_NUM_SUBQUERIES = 3
 
-config_SUBQUERY_AST_MAX_SIZE :: Int
-config_SUBQUERY_AST_MAX_SIZE = 6
 
 produceModelsQuery :: (Show a) => [[Model a]] -> TheoryPredicate -> String
 produceModelsQuery models pred = query
@@ -101,7 +98,7 @@ generatePbeModels ::
   FilePath ->
   Dto ->
   ExceptT Error IO [([Model TheorySymbol], IntermediateResults)]
-generatePbeModels solverPath (Dto theory pre _) = do
+generatePbeModels solverPath (Dto theory pre _ _) = do
   (models, debugInfos) <- looper config_NUM_SUBQUERIES (return nullInit)
   theoryModels <- except $ sequence $ map sequence $ map (map readModel) models
   return $ zip theoryModels debugInfos

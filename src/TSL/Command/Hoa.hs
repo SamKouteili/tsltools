@@ -68,17 +68,17 @@ hoa (Options {inputPath, outputPath, solverPath, ltlsyntPath}) = do
   preprocessedSpec <- Preprocessor.preprocess input
 
   -- desugared TSLMT spec (String) -> theory-encoded TSL spec (String)
-  theorizedSpec <- ModuloTheories.theorize solverPath preprocessedSpec
+  theorizedSpec <- ModuloTheories.theorize solverPath 3 preprocessedSpec
 
   -- theory-encoded TSL spec (String) -> TLSF (String)
   tlsfSpec <- TLSF.lower' theorizedSpec
 
   -- TLSF (String) -> HOA controller (String)
-  hoaController <- LTL.synthesize ltlsyntPath tlsfSpec
+  hoaController <- LTL.synthesize ltlsyntPath False tlsfSpec
 
   hoaController <-
     case hoaController of
-      Nothing -> TLSF.counter' theorizedSpec >>= LTL.synthesize ltlsyntPath >>= return . Left . fromJust
+      Nothing -> TLSF.counter' theorizedSpec >>= LTL.synthesize ltlsyntPath False >>= return . Left . fromJust
       Just c -> return $ Right c
 
   case hoaController of

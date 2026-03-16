@@ -36,10 +36,6 @@ import TSL.ModuloTheories.Theories
     symbolType,
   )
 
-config_NUM_SUBQUERIES :: Int
-config_NUM_SUBQUERIES = 3
-
-
 produceModelsQuery :: (Show a) => [[Model a]] -> TheoryPredicate -> String
 produceModelsQuery models pred = query
   where
@@ -96,10 +92,11 @@ generatePbeModel solverPath pred prevModels = liftM2 (,) models debugInfo
 
 generatePbeModels ::
   FilePath ->
+  Int ->
   Dto ->
   ExceptT Error IO [([Model TheorySymbol], IntermediateResults)]
-generatePbeModels solverPath (Dto theory pre _ _) = do
-  (models, debugInfos) <- looper config_NUM_SUBQUERIES (return nullInit)
+generatePbeModels solverPath numModels (Dto theory pre _ _) = do
+  (models, debugInfos) <- looper numModels (return nullInit)
   theoryModels <- except $ sequence $ map sequence $ map (map readModel) models
   return $ zip theoryModels debugInfos
   where

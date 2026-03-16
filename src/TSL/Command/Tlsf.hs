@@ -1,6 +1,6 @@
 module TSL.Command.Tlsf (command) where
 
-import Options.Applicative (Parser, ParserInfo, action, fullDesc, header, help, helper, info, long, metavar, optional, progDesc, short, showDefault, strOption, value)
+import Options.Applicative (Parser, ParserInfo, action, auto, fullDesc, header, help, helper, info, long, metavar, option, optional, progDesc, short, showDefault, strOption, value)
 import qualified TSL.ModuloTheories as ModuloTheories
 import qualified TSL.Preprocessor as Preprocessor
 import qualified TSL.TLSF as TLSF
@@ -9,7 +9,8 @@ import TSL.Utils (readInput, writeOutput)
 data Options = Options
   { inputPath :: Maybe FilePath,
     outputPath :: Maybe FilePath,
-    solverPath :: FilePath
+    solverPath :: FilePath,
+    numModels :: Int
   }
 
 optionsParserInfo :: ParserInfo Options
@@ -46,9 +47,16 @@ optionsParser =
           <> help "Path to SMT and SyGus solver"
           <> action "file"
       )
+    <*> option auto
+      ( long "SYGUS-NUMMODELS"
+          <> value 3
+          <> showDefault
+          <> metavar "N"
+          <> help "Number of PBE models for SyGuS Eventually queries"
+      )
 
 tlsf :: Options -> IO ()
-tlsf (Options {inputPath, outputPath, solverPath}) = do
+tlsf (Options {inputPath, outputPath, solverPath, numModels}) = do
   -- Read input
   input <- readInput inputPath
 
@@ -56,7 +64,7 @@ tlsf (Options {inputPath, outputPath, solverPath}) = do
   preprocessedSpec <- Preprocessor.preprocess input
 
   -- desugared TSLMT spec (String) -> theory-encoded TSL spec (String)
-  theorizedSpec <- ModuloTheories.theorize solverPath preprocessedSpec
+  theorizedSpec <- ModuloTheories.theorize solverPath numModels preprocessedSpec
 
   -- theory-encoded TSL spec (String) -> TLSF (String)
   tlsfSpec <- TLSF.lower' theorizedSpec

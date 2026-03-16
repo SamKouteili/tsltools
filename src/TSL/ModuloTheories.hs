@@ -27,8 +27,8 @@ import qualified TSL.Preprocessor as PP (Specification (..), FunctionDef (..), p
 import TSL.ModuloTheories.Sygus
 import TSL.ModuloTheories.Theories
 
-theorize :: FilePath -> String -> IO String
-theorize solverPath spec = do
+theorize :: FilePath -> Int -> String -> IO String
+theorize solverPath numModels spec = do
   -- check if ltlsynt is available on path
   ltlsyntAvailable <- checkSolverPath solverPath
   unless ltlsyntAvailable $
@@ -91,6 +91,7 @@ theorize solverPath spec = do
                 solverPath
                 defs
                 cfg
+                numModels
                 (unError $ buildDtoList theory tslSpec)
 
           assumptionsBlock :: IO String

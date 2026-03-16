@@ -56,7 +56,7 @@ createContext poolSize verbosity ltlsyntPath =
       tslSpecRealizable = tslSpecRealizable
     }
   where
-    tslSpecRealizable tslSpec = LTL.realizable ltlsyntPath $ TLSF.lower tslSpec
+    tslSpecRealizable tslSpec = LTL.realizable ltlsyntPath False $ TLSF.lower tslSpec
 
 -- | 'logOn' writes a log message if the 'Verbosity' specified in the
 -- context is one that has been given as argument.

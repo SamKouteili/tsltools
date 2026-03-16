@@ -12,27 +12,28 @@ import TSL.Error (genericError, unwrap)
 
 -- | Given LTL spec in TLSF format, synthesize a Right HOA controller
 --   If unrealizable, generate a Left counterstrategy
-synthesize :: FilePath -> String -> IO (Maybe String)
-synthesize ltlsyntPath tlsfContents = do
-  (exitCode, stdout, stderr) <- synthesize' ltlsyntPath tlsfContents
+synthesize :: FilePath -> Bool -> String -> IO (Maybe String)
+synthesize ltlsyntPath finiteMode tlsfContents = do
+  (exitCode, stdout, stderr) <- synthesize' ltlsyntPath finiteMode tlsfContents
   if exitCode /= ExitSuccess
     then return Nothing
     else return . Just . unlines . tail . lines $ stdout
 
-realizable :: FilePath -> String -> IO Bool
-realizable ltlsyntPath tlsfContents = do
-  (exitCode, _, _) <- synthesize' ltlsyntPath tlsfContents
+realizable :: FilePath -> Bool -> String -> IO Bool
+realizable ltlsyntPath finiteMode tlsfContents = do
+  (exitCode, _, _) <- synthesize' ltlsyntPath finiteMode tlsfContents
   if exitCode /= ExitSuccess
     then return True
     else return False
 
-synthesize' :: FilePath -> String -> IO (ExitCode, String, String)
-synthesize' ltlsyntPath tlsfContents = do
-  -- check if ltlsynt is available on path
-  ltlsyntAvailable <- checkLtlsynt ltlsyntPath
-  unless ltlsyntAvailable $
+synthesize' :: FilePath -> Bool -> String -> IO (ExitCode, String, String)
+synthesize' ltlsyntPath finiteMode tlsfContents = do
+  let synthTool = if finiteMode then "ltlfsynt" else ltlsyntPath
+  -- check if synth tool is available on path
+  synthToolAvailable <- checkLtlsynt synthTool
+  unless synthToolAvailable $
     unwrap . genericError $
-      "Invalid path to ltlsynt: " ++ ltlsyntPath
+      "Invalid path to synthesis tool: " ++ synthTool
 
   -- prepare arguments for ltlsynt
   let tlsfSpec =
@@ -49,8 +50,8 @@ synthesize' ltlsyntPath tlsfContents = do
           "--hoaf=i"
         ]
 
-  -- call ltlsynt
-  readProcessWithExitCode ltlsyntPath ltlCommandArgs ""
+  -- call synthesis tool
+  readProcessWithExitCode synthTool ltlCommandArgs ""
   where
     prFormulae ::
       S.Configuration -> S.Specification -> String

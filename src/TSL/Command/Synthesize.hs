@@ -4,7 +4,7 @@ import qualified Control.Monad as ControlM
 import Data.Maybe (fromJust)
 import Data.Set (toList)
 import qualified Data.Set as Set
-import Options.Applicative (Parser, ParserInfo, action, flag, flag', fullDesc, header, help, helper, info, long, metavar, optional, progDesc, short, showDefault, strOption, value, (<|>))
+import Options.Applicative (Parser, ParserInfo, action, auto, flag, flag', fullDesc, header, help, helper, info, long, metavar, option, optional, progDesc, short, showDefault, strOption, value, (<|>))
 import System.Exit (ExitCode (ExitFailure), exitSuccess, exitWith)
 import TSL.Base.Logic (functions, inputs, outputs, predicates, updates)
 import qualified TSL.Base.Reader as Base (readTSL)
@@ -24,7 +24,9 @@ data Options = Options
     target :: HOA.CodeTarget,
     solverPath :: FilePath,
     ltlsyntPath :: FilePath,
-    analyzeSpec :: Bool
+    analyzeSpec :: Bool,
+    finiteMode :: Bool,
+    numModels :: Int
   }
 
 optionsParserInfo :: ParserInfo Options
@@ -81,9 +83,22 @@ optionsParser =
       ( long "analyze"
           <> help "Analyze the specification before synthesis"
       )
+    <*> flag
+      False
+      True
+      ( long "finite"
+          <> help "Use finite-trace (LTLf) synthesis via ltlfsynt instead of ltlsynt"
+      )
+    <*> option auto
+      ( long "SYGUS-NUMMODELS"
+          <> value 3
+          <> showDefault
+          <> metavar "N"
+          <> help "Number of PBE models for SyGuS Eventually queries"
+      )
 
 synthesize :: Options -> IO ()
-synthesize (Options {inputPath, outputPath, target, solverPath, ltlsyntPath, analyzeSpec}) = do
+synthesize (Options {inputPath, outputPath, target, solverPath, ltlsyntPath, analyzeSpec, finiteMode, numModels}) = do
   -- Read input
   input <- readInput inputPath
 
@@ -91,7 +106,7 @@ synthesize (Options {inputPath, outputPath, target, solverPath, ltlsyntPath, ana
   preprocessedSpec <- Preprocessor.preprocess input
 
   -- desugared TSLMT spec (String) -> theory-encoded TSL spec (String)
-  theorizedSpec <- ModuloTheories.theorize solverPath preprocessedSpec
+  theorizedSpec <- ModuloTheories.theorize solverPath numModels preprocessedSpec
 
   ControlM.when analyzeSpec $ do
     spec <- Base.readTSL theorizedSpec >>= unwrap
@@ -106,11 +121,11 @@ synthesize (Options {inputPath, outputPath, target, solverPath, ltlsyntPath, ana
   tlsfSpec <- TLSF.lower' theorizedSpec
 
   -- TLSF (String) -> HOA controller (String)
-  hoaController <- LTL.synthesize ltlsyntPath tlsfSpec
+  hoaController <- LTL.synthesize ltlsyntPath finiteMode tlsfSpec
 
   hoaController <-
     case hoaController of
-      Nothing -> TLSF.counter' theorizedSpec >>= LTL.synthesize ltlsyntPath >>= return . Left . fromJust
+      Nothing -> TLSF.counter' theorizedSpec >>= LTL.synthesize ltlsyntPath finiteMode >>= return . Left . fromJust
       Just c -> return $ Right c
 
   -- HOA controller (String) -> controller in target language (String)

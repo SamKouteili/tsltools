@@ -73,9 +73,10 @@ generateAssumption ::
   FilePath ->
   [DefinedFunction] ->
   Cfg ->
+  Int ->
   Dto ->
   ExceptT Error IO (String, SygusDebugInfo)
-generateAssumption solverPath defs cfg dto =
+generateAssumption solverPath defs cfg numModels dto =
   if not $ sygus2Supported $ theory dto
     then except unsupportedError
     else case temporal dto of
@@ -95,7 +96,7 @@ generateAssumption solverPath defs cfg dto =
                 let debugInfo' = NextDebug debugInfo assumption
                 return (assumption, debugInfo')
       Eventually -> do
-        pbeResults <- generatePbeModels solverPath dto
+        pbeResults <- generatePbeModels solverPath numModels dto
         let (pbeModels, pbeInfos) = unzip pbeResults
 
         subqueryResults <- mapM genEventuallyUpdates pbeModels
@@ -121,20 +122,22 @@ generateSygusAssumptions ::
   FilePath ->
   [DefinedFunction] ->
   Cfg ->
+  Int ->
   [Dto] ->
   [ExceptT Error IO String]
-generateSygusAssumptions solverPath defs cfg dtos =
+generateSygusAssumptions solverPath defs cfg numModels dtos =
   map (fmap fst) $
-    generateAssumption solverPath defs cfg
+    generateAssumption solverPath defs cfg numModels
       <$> dtos
 
 sygusDebug ::
   FilePath ->
   [DefinedFunction] ->
   Cfg ->
+  Int ->
   [Dto] ->
   [ExceptT Error IO SygusDebugInfo]
-sygusDebug solverPath defs cfg dtos =
+sygusDebug solverPath defs cfg numModels dtos =
   map (fmap snd) $
-    generateAssumption solverPath defs cfg
+    generateAssumption solverPath defs cfg numModels
       <$> dtos

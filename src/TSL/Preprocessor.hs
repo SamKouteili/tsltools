@@ -310,8 +310,8 @@ tslDef =
       Token.commentEnd = "*/",
       Token.nestedComments = True,
       Token.caseSensitive = True,
-      Token.opStart = oneOf "!&|=/+*[-<",
-      Token.opLetter = oneOf "!&|=/+*[]<->",
+      Token.opStart = oneOf "!&|=/+*-<",
+      Token.opLetter = oneOf "!&|=/+*<->",
       Token.reservedNames = sectionNames ++ temporalOpNames ++ issyKeywords ++ ["#NRA", "#define"],
       Token.reservedOpNames = binOpNames
     }
@@ -552,7 +552,8 @@ normalizeIssyConstants s@(c : cs)
 
 parse :: String -> Either Error Specification
 parse input =
-  let normalized = normalizeIssyConstants input
+  let preprocessed = extractCommentTheory input
+      normalized = normalizeIssyConstants preprocessed
       result = Parsec.parse (specParser <* Parsec.eof) errMsg normalized
    in case result of
         Left err -> parseError err
@@ -562,6 +563,22 @@ parse input =
       "\n\nParser Failed! Input was:\n\n"
         ++ unlines (map ('\t' :) (lines input))
         ++ "\n\n"
+
+    -- | Convert comment-wrapped theory annotations (e.g. //#LIA#) to
+    -- the bare format (#LIA) that the parser expects.
+    extractCommentTheory :: String -> String
+    extractCommentTheory s =
+      let ls = lines s
+       in unlines $ map convertLine ls
+
+    convertLine :: String -> String
+    convertLine l =
+      let stripped = dropWhile (== ' ') l
+       in case stripped of
+            '/' : '/' : '#' : rest ->
+              let tag = takeWhile (/= '#') rest
+               in '#' : tag
+            _ -> l
 
 preprocess :: String -> IO String
 preprocess input = do

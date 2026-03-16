@@ -1,13 +1,13 @@
 always assume {
-G !((eq x a) && ((eq a x) && (!(eq x a) && !(eq a x))));
-G !((eq x a) && ((eq a x) && !(eq x a)));
-G !((eq x a) && ((eq a x) && !(eq a x)));
-G !((eq x a) && (!(eq x a) && !(eq a x)));
-G !((eq x a) && !(eq x a));
+G !(!(eq x a) && ((eq x a) && (!(eq a x) && (eq a x))));
+G !(!(eq x a) && ((eq x a) && !(eq a x)));
+G !(!(eq x a) && ((eq x a) && (eq a x)));
+G !(!(eq x a) && (eq x a));
+G !(!(eq x a) && (!(eq a x) && (eq a x)));
+G !(!(eq x a) && (eq a x));
+G !((eq x a) && (!(eq a x) && (eq a x)));
 G !((eq x a) && !(eq a x));
-G !((eq a x) && (!(eq x a) && !(eq a x)));
-G !((eq a x) && !(eq x a));
-G !((eq a x) && !(eq a x));
+G !(!(eq a x) && (eq a x));
 
 }
 

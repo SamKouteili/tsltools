@@ -7,10 +7,11 @@
 -- Maintainer  :  Wonhyuk Choi
 module TSL.ModuloTheories.Sygus.Query (generateSygusQuery) where
 
-import Data.List (nub)
+import Data.List (nub, partition)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
+import TSL.Base.Ast (AstInfo (..), SymbolInfo (..), deduplicate, (+++))
 import TSL.Error (Error, errSygus)
 import TSL.ModuloTheories.Cfg
   ( Cfg (..),
@@ -20,6 +21,7 @@ import TSL.ModuloTheories.Cfg
 import TSL.ModuloTheories.Predicates
   ( TheoryPredicate,
     pred2Smt,
+    predInfo,
     predReplacedSmt,
     predSignals,
   )
@@ -32,12 +34,18 @@ import TSL.ModuloTheories.Sygus.Common
 import TSL.ModuloTheories.Theories
   ( DefinedFunction (..),
     TAst,
+    Theory,
     TheorySymbol,
+    isUninterpreted,
     makeSignal,
+    read2Symbol,
+    replaceTAst,
     smtSortDecl,
+    symbol2Smt,
     symbolTheory,
     symbolType,
     tast2Smt,
+    tastInfo,
     tastSignals,
   )
 
@@ -152,10 +160,84 @@ syntaxConstraint functionInput cfg =
     varType = symbolType functionInput
     inputName = show functionInput ++ targetPostfix
     inputTast = makeSignal (symbolTheory functionInput) inputName
-    cfg' = extendCfg (functionInput, inputTast) cfg
+    -- Build grammar like TeMoS (PLDI'22): for each production rule,
+    -- include both the original (recursive, nonterminal references stay)
+    -- and a variant with the nonterminal replaced by the synth-fun input
+    -- (terminal base case). Do NOT add bare identity as a standalone rule.
+    inputSymbol = case read2Symbol (symbolTheory functionInput) inputName of
+      Right s -> s
+      Left _ -> error "Failed to create input symbol"
+    cfg' = addTerminalVariants functionInput inputSymbol cfg
+
+    -- For each rule of the target nonterminal, add a variant where
+    -- occurrences of the nonterminal are replaced with the input variable.
+    addTerminalVariants :: TheorySymbol -> TheorySymbol -> Cfg -> Cfg
+    addTerminalVariants nt inputSym (Cfg g) =
+      case Map.lookup nt g of
+        Nothing -> Cfg g
+        Just rules ->
+          let terminalRules = map (replaceTAst (nt, inputSym)) rules
+              allRules = rules ++ terminalRules
+           in Cfg $ Map.insert nt allRules g
+
 
     funDeclComment = "\r\n;; Name and signature of the function to be synthesized"
     varDeclComment = "\r\n;; Declare the nonterminals used in the grammar"
+
+-- | Collect AstInfo from all production rules in the CFG grammar.
+cfgInfo :: Cfg -> AstInfo TheorySymbol
+cfgInfo cfg =
+  foldl (+++) (AstInfo [] [] []) $
+    concatMap (map tastInfo) $ Map.elems (grammar cfg)
+
+-- | Generate declare-const and declare-fun statements for all symbols
+-- that appear in the grammar and DTO constraints but are not already
+-- declared as synth-fun inputs, forall-quantified variables, or defined functions.
+sygusDeclarations :: Theory -> [DefinedFunction] -> TheorySymbol -> Dto -> Cfg -> String
+sygusDeclarations theory defs synthTarget (Dto _ pre post _) cfg =
+  unlines [defineFuns, varDecls, funcDecls, predDecls]
+  where
+    -- Collect all symbols from grammar rules and pre/post conditions
+    allInfo = deduplicate $ cfgInfo cfg +++ predInfo pre +++ predInfo post
+    AstInfo vars funcs preds = allInfo
+
+    -- Names to exclude: synth-fun input, forall-quantified vars, defined functions
+    definedNames = map dfName defs
+    synthInputName = symbol2Smt synthTarget ++ targetPostfix
+    forallNames = map symbol2Smt $ nub $ predSignals pre ++ predSignals post
+    excludeNames = synthInputName : forallNames ++ definedNames
+
+    defineFuns = unlines $ map dfSmtDecl defs
+
+    -- Nullary functions (arity 0) are constants — declare them as such
+    (nullaryFuncs, realFuncs) = partition (\(SymbolInfo _ a) -> a == 0) funcs
+
+    -- Declare constants: vars + nullary functions that aren't excluded
+    allConsts = vars ++ nullaryFuncs
+    varDecls = unlines $ map declConst $ filter (notExcluded . symbol) allConsts
+    funcDecls = unlines $ map declFunc realFuncs
+    predDecls = unlines $ map declPred preds
+
+    notExcluded sym = symbol2Smt sym `notElem` excludeNames
+    symbol (SymbolInfo x _) = x
+
+    declConst (SymbolInfo x _) =
+      "(declare-const " ++ symbol2Smt x ++ " " ++ symbolType x ++ ")"
+
+    declareFun retType (SymbolInfo f arity)
+      | not (isUninterpreted f) = ""
+      | symbol2Smt f `elem` excludeNames = ""
+      | otherwise =
+          unwords
+            [ "(declare-fun",
+              symbol2Smt f,
+              "(",
+              unwords $ replicate arity $ show theory,
+              ")",
+              retType ++ ")"
+            ]
+    declFunc = declareFun (show theory)
+    declPred = declareFun "Bool"
 
 generateSygusQuery :: [DefinedFunction] -> Cfg -> [Model TheorySymbol] -> Dto -> Either Error String
 generateSygusQuery defs cfg models dto@(Dto theory _ post _) =
@@ -165,18 +247,18 @@ generateSygusQuery defs cfg models dto@(Dto theory _ post _) =
   where
     sygusTargets = getSygusTargets post cfg
     synthTarget = pickTarget sygusTargets
-    grammar = syntaxConstraint synthTarget cfg
+    grammarBlock = syntaxConstraint synthTarget cfg
     constraint = dto2Sygus synthTarget models dto
     declTheory = "(set-logic " ++ show theory ++ ")"
     checkSynth = "(check-synth)"
     sortDecl = smtSortDecl theory
-    defineFuns = unlines $ map dfSmtDecl defs
+    declarations = sygusDeclarations theory defs synthTarget dto cfg
     query =
       unlines
         [ declTheory,
           sortDecl,
-          defineFuns,
-          grammar,
+          declarations,
+          grammarBlock,
           constraint,
           checkSynth
         ]

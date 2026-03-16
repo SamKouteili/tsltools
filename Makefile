@@ -13,8 +13,11 @@ doc:
 format:
 	ormolu --mode inplace $$(find . -name '*.hs')
 
+eval:
+	./test/eval.sh
+
 clean:
 	stack clean
 
-.PHONY: build install test doc format clean
+.PHONY: build install test doc format eval clean
 .SILENT:

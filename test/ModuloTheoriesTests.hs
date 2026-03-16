@@ -22,7 +22,7 @@ import Distribution.TestSuite
     Test (..),
     TestInstance (..),
   )
-import System.Directory (doesFileExist)
+import System.Directory (findExecutable)
 import TSL.Error (warn)
 import TSL.ModuloTheories
   ( Cfg (..),
@@ -67,7 +67,7 @@ makeTestName :: String -> String
 makeTestName = ("Modulo Theories >> " ++)
 
 cvc5Path :: FilePath
-cvc5Path = "deps/bin/cvc5"
+cvc5Path = "cvc5"
 
 commandTests :: [Test]
 commandTests = [convert2Cabal (makeTestName "Command") hUnitTest]
@@ -78,7 +78,7 @@ commandTests = [convert2Cabal (makeTestName "Command") hUnitTest]
 
     hUnitTest = do
       let runTest (path, expectedPath) = do
-            output <- readFile path >>= MT.theorize "cvc5"
+            output <- readFile path >>= MT.theorize "cvc5" 3
             expected <- readFile expectedPath
             return $ H.TestCase $ output @=? expected
 
@@ -216,8 +216,8 @@ allTests = concat [predicatesTests, commandTests, cfgTests, consistencyTests, sy
 
 tests :: IO [Test]
 tests = do
-  cvc5Exists <- doesFileExist cvc5Path
-  if cvc5Exists
+  cvc5Exists <- findExecutable cvc5Path
+  if cvc5Exists /= Nothing
     then return allTests
     else do
       _ <- TSL.Error.warn ("Warning: CVC5 PATH " ++ cvc5Path ++ " NOT FOUND!")
